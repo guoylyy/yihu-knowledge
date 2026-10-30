@@ -1,0 +1,5 @@
+<% if (crumbs.length) { %>
+<nav class="crumbs" aria-label="路径">
+  <% crumbs.forEach((c, i) => { %><% if (i) { %><span aria-hidden="true">/</span><% } %><a href="<%= c.href %>"><%= c.name %></a><% }) %>
+</nav>
+<% } %>

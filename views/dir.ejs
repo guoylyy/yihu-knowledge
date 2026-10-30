@@ -1,0 +1,24 @@
+<%- include('partials/head') %>
+<div class="page wide">
+  <%- include('partials/crumbs') %>
+  <div class="title-row">
+    <h1 class="page-title"><%= pageTitle %></h1>
+    <div class="actions">
+      <% if (ctx.mode === 'private' && dir) { %><a class="btn" href="<%= base %>/admin/shares?path=<%= encodeURIComponent(dir) %>">分享目录</a><% } %>
+      <% if (ctx.mode === 'share' && dir === ctx.share.path) { %><a class="btn" href="<%= ctx.prefix %>/download">打包下载</a><% } %>
+    </div>
+  </div>
+  <% if (dirs.length) { %>
+  <ul class="dir-grid">
+    <% for (const d of dirs) { %><li><a href="<%= d.href %>"><span><%= d.name %></span><span class="muted small"><%= d.count %> 个文件</span></a></li><% } %>
+  </ul>
+  <% } %>
+  <% if (files.length) { %>
+  <ul class="list">
+    <% for (const f of files) { %>
+    <li><a href="<%= f.href %>"><strong><%= f.title || f.name %></strong></a><span class="muted small"><%= f.ext || '文件' %> · <%= f.sizeLabel %> · <%= fmtTime(f.mtime) %></span></li>
+    <% } %>
+  </ul>
+  <% } else if (!dirs.length) { %><p class="muted">这个目录是空的。</p><% } %>
+</div>
+<%- include('partials/foot') %>

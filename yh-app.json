@@ -1,0 +1,29 @@
+{
+  "code": "knowledge",
+  "name": "知识库",
+  "icon": "📚",
+  "category": "效率",
+  "description": "手机优先的个人知识库：阅读 Markdown 笔记、可控分享与访问审计、双链图谱、AI 总结",
+  "version": "1.0.0",
+  "port": 3030,
+  "health": "/health",
+  "callback": "/sso/callback",
+  "entry": "/",
+  "database": false,
+  "memory": "512m",
+  "visibility": {},
+  "isDefault": false,
+  "env": {
+    "AUTH_MODE": "sso",
+    "KB_ROOT": "/data/library",
+    "KB_DATA_DIR": "/data/db",
+    "KB_TRUST_PROXY": "1"
+  },
+  "deploy": {
+    "branch": "release",
+    "mode": "manual"
+  },
+  "ui": {
+    "responsive": true
+  }
+}

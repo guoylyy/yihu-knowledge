@@ -1,0 +1,28 @@
+<%- include('partials/head') %>
+<div class="page wide">
+  <h1 class="page-title">搜索</h1>
+  <form class="filters" action="<%= base %>/search" method="get">
+    <input type="search" name="q" value="<%= q %>" placeholder="关键词，空格分隔" aria-label="关键词">
+    <select name="dir" aria-label="目录">
+      <option value="">全部目录</option>
+      <% for (const d of dirs) { %><option value="<%= d %>"<%= d === dir ? ' selected' : '' %>><%= d %></option><% } %>
+    </select>
+    <select name="tag" aria-label="标签">
+      <option value="">全部标签</option>
+      <% for (const t of tags) { %><option value="<%= t.tag %>"<%= t.tag === tag ? ' selected' : '' %>>#<%= t.tag %>（<%= t.n %>）</option><% } %>
+    </select>
+    <button class="btn primary" type="submit">搜索</button>
+  </form>
+  <% if (q || tag) { %><p class="muted small">找到 <%= results.length %> 条<%= results.length >= 50 ? '（仅显示前 50 条）' : '' %></p><% } %>
+  <ul class="list results">
+    <% for (const r of results) { %>
+    <li>
+      <a href="<%= r.href %>"><strong><%= r.title || r.name %></strong></a>
+      <span class="muted small"><%= r.path %></span>
+      <p class="snippet"><%- r.snippet %></p>
+    </li>
+    <% } %>
+  </ul>
+  <% if ((q || tag) && !results.length) { %><p class="muted">没有匹配的结果，换个关键词试试。</p><% } %>
+</div>
+<%- include('partials/foot') %>

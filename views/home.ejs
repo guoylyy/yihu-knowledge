@@ -1,0 +1,24 @@
+<%- include('partials/head') %>
+<div class="page wide">
+  <h1 class="page-title">知识库</h1>
+  <dl class="tiles">
+    <div><dt>文件</dt><dd><%= stats.files.toLocaleString('zh-CN') %></dd></div>
+    <div><dt>字数</dt><dd><%= stats.words.toLocaleString('zh-CN') %></dd></div>
+    <div><dt>双链</dt><dd><%= stats.links.toLocaleString('zh-CN') %></dd></div>
+  </dl>
+  <p><a class="btn" href="<%= base %>/graph">查看关系图</a></p>
+  <h2>最近修改</h2>
+  <ul class="list">
+    <% for (const f of recent) { %>
+    <li>
+      <a href="<%= f.href %>"><strong><%= f.title || f.name %></strong></a>
+      <span class="muted small"><%= f.dir || '根目录' %> · <%= fmtTime(f.mtime) %></span>
+    </li>
+    <% } %>
+  </ul>
+  <h2>目录</h2>
+  <ul class="dir-grid">
+    <% for (const d of dirs) { %><li><a href="<%= d.href %>"><span><%= d.name %></span><span class="muted small"><%= d.count %> 个文件</span></a></li><% } %>
+  </ul>
+</div>
+<%- include('partials/foot') %>

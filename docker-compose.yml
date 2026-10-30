@@ -1,0 +1,44 @@
+services:
+  knowledge-base:
+    build: .
+    container_name: knowledge-base
+    restart: unless-stopped
+    # 容器用这个 UID 写 ./data，须与宿主机 ./data 的属主一致
+    user: "${KB_UID:-1000}:${KB_GID:-1000}"
+    # 只绑本机，由 1Panel/OpenResty 反代并终止 HTTPS；secure cookie 要求对外必须是 HTTPS
+    ports:
+      - "${KB_BIND:-127.0.0.1}:${KB_PORT:-3030}:3030"
+    environment:
+      KB_ROOT: /library
+      KB_DATA_DIR: /data
+      AUTH_MODE: ${AUTH_MODE:-password}
+      # password / both 时必填，缺了应用启动时报错；sso 时不需要
+      KB_PASSWORD: ${KB_PASSWORD:-}
+      KB_ALLOWED_USERS: ${KB_ALLOWED_USERS:-}
+      KB_BASE_URL: ${KB_BASE_URL:?请在 .env 中设置 KB_BASE_URL}
+      KB_OWNER_NAME: ${KB_OWNER_NAME:-知识库主人}
+      KB_DENY_GLOBS: ${KB_DENY_GLOBS:-}
+      KB_TRUST_PROXY: ${KB_TRUST_PROXY:-1}
+      AI_PROVIDER: ${AI_PROVIDER:-}
+      AI_BASE_URL: ${AI_BASE_URL:-}
+      AI_API_KEY: ${AI_API_KEY:-}
+      AI_MODEL: ${AI_MODEL:-}
+      AI_PLATFORM_MODEL: ${AI_PLATFORM_MODEL:-}
+      AI_MAX_CHARS: ${AI_MAX_CHARS:-40000}
+      AI_CLI_MODEL: ${AI_CLI_MODEL:-}
+      YH_CLIENT_ID: ${YH_CLIENT_ID:-}
+      YH_CLIENT_SECRET: ${YH_CLIENT_SECRET:-}
+      YH_WEB_URL: ${YH_WEB_URL:-}
+      YH_API_URL: ${YH_API_URL:-}
+      YH_APP_URL: ${YH_APP_URL:-}
+      TZ: ${TZ:-Asia/Shanghai}
+    volumes:
+      - ./library:/library:ro
+      - ./data:/data
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true

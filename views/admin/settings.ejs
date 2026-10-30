@@ -1,0 +1,29 @@
+<%- include('../partials/head') %>
+<div class="page wide">
+  <h1 class="page-title">规则与设置</h1>
+  <%- include('nav') %>
+  <h2>当前生效的 deny 规则（<%= globs.length %>）</h2>
+  <p class="muted small">通过 KB_DENY_GLOBS 追加；写 <code>!规则</code> 可移除一条默认规则。规则作用于路径的每一段，不区分大小写。当前排除文件 <%= counts.denied %> 个。</p>
+  <ul class="chips"><% for (const g of globs) { %><li><code><%= g %></code></li><% } %></ul>
+  <h2>内容敏感文件（<%= sensitive.length %>）</h2>
+  <p class="muted small">文件名未命中规则，但正文疑似含口令或密钥。这些文件登录后可读，但不进目录分享、不发 AI，单篇分享需强制确认。</p>
+  <div class="table-wrap"><table class="grid">
+    <thead><tr><th>路径</th><th>命中类型</th></tr></thead>
+    <tbody><% for (const s of sensitive) { %><tr><td><%= s.path %></td><td><%= s.sensitive_kinds %></td></tr><% } %></tbody>
+  </table></div>
+  <h2>运行配置</h2>
+  <table class="kv">
+    <tr><th scope="row">对外地址</th><td><%= baseUrl %></td></tr>
+    <tr><th scope="row">信任代理层数</th><td><%= trustProxy %></td></tr>
+    <tr><th scope="row">登录方式</th><td><%= authMode %><% if (authMode !== 'password') { %>（白名单 <%= allowedCount %> 人）<% } %></td></tr>
+    <tr><th scope="row">AI 通道</th><td><%= aiChannel %></td></tr>
+  </table>
+  <h2>AI 调用日志</h2>
+  <% if (aiLog.length) { %>
+  <div class="table-wrap"><table class="grid">
+    <thead><tr><th>时间</th><th>文件</th><th>字符数</th><th>选区</th><th>状态</th></tr></thead>
+    <tbody><% for (const l of aiLog) { %><tr><td><%= fmtTime(l.ts) %></td><td><%= l.path %></td><td><%= l.chars %></td><td><%= l.is_selection ? '是' : '否' %></td><td><%= l.status %></td></tr><% } %></tbody>
+  </table></div>
+  <% } else { %><p class="muted">还没有调用记录。</p><% } %>
+</div>
+<%- include('../partials/foot') %>

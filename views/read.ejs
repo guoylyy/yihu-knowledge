@@ -1,0 +1,125 @@
+<%- include('partials/head') %>
+<article class="page" data-path="<%= file.path %>"<% if (ctx.mode === 'private') { %> data-csrf="<%= csrf %>"<% } %>>
+  <%- include('partials/crumbs') %>
+  <h1 class="page-title"><%= pageTitle %></h1>
+  <div class="actions">
+    <% if (ctx.mode === 'private') { %>
+    <% if (['md', 'txt'].includes(file.ext)) { %>
+    <button class="btn" id="ai-summary" type="button"<% if (file.is_sensitive) { %> disabled aria-describedby="ai-blocked"<% } %>>AI 总结</button>
+    <% } %>
+    <a class="btn" href="<%= base %>/admin/shares?path=<%= encodeURIComponent(file.path) %>">分享</a>
+    <a class="btn" href="<%= base %>/graph?focus=<%= encodeURIComponent(file.path) %>">关系图</a>
+    <% } %>
+    <a class="btn" href="<%= download %>">下载</a>
+    <div class="font-size" role="group" aria-label="正文字号">
+      <button type="button" data-size="14">小</button><button type="button" data-size="16">中</button><button type="button" data-size="18">大</button>
+    </div>
+  </div>
+  <% if (ctx.mode === 'private' && file.is_sensitive) { %><p class="alert" id="ai-blocked">这篇疑似含口令/密钥，已禁止发送给 AI，也默认禁止分享。</p><% } %>
+
+  <% if (frontmatter && Object.keys(frontmatter).length) { %>
+  <details class="props">
+    <summary>属性</summary>
+    <table>
+      <% for (const [k, v] of Object.entries(frontmatter)) { %>
+      <tr><th scope="row"><%= k %></th><td><%= typeof v === 'object' ? JSON.stringify(v) : v %></td></tr>
+      <% } %>
+    </table>
+  </details>
+  <% } %>
+
+  <% if (body.kind === 'md') { %>
+    <div class="prose" id="content"><%- body.html %></div>
+  <% } else if (body.kind === 'image') { %>
+    <div class="media"><img src="<%= body.src %>" alt="<%= file.name %>"></div>
+  <% } else if (body.kind === 'video') { %>
+    <div class="media"><video src="<%= body.src %>" controls preload="metadata"></video></div>
+  <% } else if (body.kind === 'pdf') { %>
+    <% if (body.mobile) { %>
+    <p class="notice">手机浏览器不便内嵌 PDF，请下载后查看。</p>
+    <a class="btn primary" href="<%= download %>">下载 PDF（<%= sizeLabel %>）</a>
+    <% } else { %>
+    <iframe class="doc-frame" id="pdf-frame" src="<%= body.src %>" title="<%= file.name %>"></iframe>
+    <p class="notice" id="pdf-fallback" hidden>当前设备不便内嵌 PDF，请点上方「下载」查看。</p>
+    <% } %>
+  <% } else if (body.kind === 'html') { %>
+    <p class="notice">网页在沙箱中显示，脚本不会运行；需要完整效果请下载原文件。</p>
+    <iframe class="doc-frame" src="<%= body.src %>" sandbox="allow-same-origin" title="<%= file.name %>"></iframe>
+  <% } else if (body.kind === 'text') { %>
+    <pre class="code" id="content"><code class="hljs"><%- body.html %></code></pre>
+    <% if (body.truncated) { %><p class="notice">文件较大，仅显示开头部分，完整内容请下载。</p><% } %>
+  <% } else if (body.kind === 'csv') { %>
+    <%- include('partials/grid', { rows: body.rows }) %>
+    <% if (body.truncated) { %><p class="notice">仅显示前 500 行，完整内容请下载。</p><% } %>
+  <% } else if (body.kind === 'office') { const p = body.preview; %>
+    <p class="notice">文本预览，排版请下载原文件。</p>
+    <% if (p.kind === 'docx') { %>
+      <div class="prose" id="content">
+      <% for (const b of p.blocks) { %>
+        <% if (b.type === 'table') { %><%- include('partials/grid', { rows: b.rows }) %>
+        <% } else if (b.level) { %><h<%= Math.min(b.level + 1, 6) %>><%= b.text %></h<%= Math.min(b.level + 1, 6) %>>
+        <% } else { %><p><%= b.text %></p><% } %>
+      <% } %>
+      </div>
+    <% } else if (p.kind === 'pptx') { %>
+      <ol class="slides" id="content">
+      <% p.slides.forEach((s, i) => { %>
+        <li><h2>第 <%= i + 1 %> 页<%= s.title ? '：' + s.title : '' %></h2>
+          <% if (s.points.length) { %><ul><% for (const t of s.points) { %><li><%= t %></li><% } %></ul><% } %></li>
+      <% }) %>
+      </ol>
+    <% } else if (p.kind === 'sheet') { %>
+      <% if (p.names.length > 1) { %>
+      <form class="sheet-picker" method="get">
+        <label>工作表
+          <select name="sheet" data-autosubmit>
+            <% for (const n of p.names) { %><option value="<%= n %>"<%= n === p.name ? ' selected' : '' %>><%= n %></option><% } %>
+          </select>
+        </label>
+        <noscript><button class="btn" type="submit">切换</button></noscript>
+      </form>
+      <% } %>
+      <%- include('partials/grid', { rows: p.rows }) %>
+      <% if (p.truncated) { %><p class="notice">仅显示前 200 行，完整内容请下载。</p><% } %>
+    <% } else if (p.kind === 'too-large') { %>
+      <p class="notice">文件过大，无法在线预览，请下载。</p>
+    <% } else { %>
+      <p class="notice">无法解析这个文件（可能已加密或损坏），请下载查看。</p>
+    <% } %>
+  <% } else if (body.kind === 'too-large') { %>
+    <p class="notice">文件过大，无法在线渲染，请下载。</p>
+  <% } else { %>
+    <p class="notice">这种格式（<%= file.ext || '未知' %>，<%= sizeLabel %>）不支持在线预览，请下载。</p>
+  <% } %>
+
+  <% if (backlinks.length) { %>
+  <section class="backlinks">
+    <h2>反向链接</h2>
+    <ul><% for (const b of backlinks) { %><li><a href="<%= ctx.href(b) %>"><%= b.title || b.name %></a></li><% } %></ul>
+  </section>
+  <% } %>
+  <% if (prev || next) { %>
+  <nav class="pager" aria-label="同目录翻页">
+    <% if (prev) { %><a href="<%= ctx.href(prev) %>"><span class="muted small">上一篇</span><%= prev.title || prev.name %></a><% } else { %><span></span><% } %>
+    <% if (next) { %><a class="next" href="<%= ctx.href(next) %>"><span class="muted small">下一篇</span><%= next.title || next.name %></a><% } %>
+  </nav>
+  <% } %>
+</article>
+<% if (ctx.mode === 'private' && ['md', 'txt'].includes(file.ext) && !file.is_sensitive) { %>
+<div class="ai-scrim" id="ai-scrim" hidden></div>
+<section class="ai-sheet" id="ai-sheet" role="dialog" aria-modal="true" aria-labelledby="ai-title" hidden>
+  <div class="ai-grip" id="ai-grip" aria-hidden="true"><span></span></div>
+  <header class="ai-head">
+    <h2 id="ai-title">AI 总结</h2>
+    <button class="icon-btn" id="ai-close" type="button" aria-label="关闭">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>
+    </button>
+  </header>
+  <div class="ai-log" id="ai-log" aria-live="polite"></div>
+  <form class="ai-form" id="ai-form">
+    <input id="ai-input" type="text" name="q" maxlength="500" placeholder="就这篇再问一句…" aria-label="就这篇再问一句" autocomplete="off" enterkeyhint="send">
+    <button class="btn primary" id="ai-send" type="submit">发送</button>
+  </form>
+</section>
+<% } %>
+<%- include('partials/foot') %>

@@ -1,0 +1,90 @@
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import express from 'express';
+import { createAi } from './ai.js';
+import { basePathOf, createAuth } from './auth.js';
+import { createCatalog } from './catalog.js';
+import { openDb } from './db.js';
+import { createDeny } from './deny.js';
+import { createIndexRunner } from './index-runner.js';
+import { pathErrorStatus, createReader } from './reader.js';
+import { createShares } from './shares.js';
+import { createSso } from './sso.js';
+import { adminRoutes } from './routes/admin.js';
+import { authRoutes } from './routes/auth.js';
+import { privateRoutes } from './routes/private.js';
+import { shareRoutes } from './routes/share.js';
+
+const here = path.dirname(fileURLToPath(import.meta.url));
+const csp = (formTargets) => [
+  "default-src 'none'", "script-src 'self'", "style-src 'self'", "img-src 'self' data: https:", "media-src 'self'",
+  "frame-src 'self'", "connect-src 'self'", `form-action ${formTargets}`, "base-uri 'none'", "frame-ancestors 'self'",
+].join('; ');
+
+export async function createApp(config) {
+  const db = openDb(config.dataDir);
+  const deny = createDeny(config.denyGlobs);
+  const realRoot = fs.realpathSync(config.root);
+  const catalog = createCatalog(db);
+  const auth = createAuth({ db, config });
+  await auth.init();
+  const shares = createShares({ db, catalog, config, deny });
+  const reader = createReader({ db, catalog, realRoot });
+  const ai = createAi({ db, config });
+  const indexer = createIndexRunner(config);
+  const sso = config.sso && !config.sso.problem ? createSso(config.sso) : null;
+  const deps = { db, config, deny, realRoot, catalog, auth, shares, reader, ai, indexer, sso };
+  // 「退出平台登录」是表单提交后 303 到平台，Chrome 的 form-action 连重定向目标一起管
+  const CSP = csp(sso ? `'self' ${new URL(config.sso.webUrl).origin}` : "'self'");
+
+  const app = express();
+  app.disable('x-powered-by');
+  app.set('trust proxy', config.trustProxy);
+  app.set('view engine', 'ejs');
+  app.set('views', path.join(here, '..', 'views'));
+  app.locals.siteName = '知识库';
+  app.locals.ownerName = config.ownerName;
+  const dateFmt = new Intl.DateTimeFormat('zh-CN', { timeZone: config.timeZone, dateStyle: 'short', timeStyle: 'short' });
+  app.locals.fmtTime = (ts) => (ts ? dateFmt.format(ts) : '—');
+
+  app.use((req, res, next) => {
+    req.base = basePathOf(req);
+    res.locals.base = req.base;
+    res.set({
+      'Content-Security-Policy': CSP,
+      'X-Content-Type-Options': 'nosniff',
+      'Referrer-Policy': 'no-referrer',
+      'X-Frame-Options': 'SAMEORIGIN',
+      'Cache-Control': 'no-store',
+    });
+    if (config.baseUrl.startsWith('https:')) res.set('Strict-Transport-Security', 'max-age=31536000');
+    next();
+  });
+  app.use('/assets', express.static(path.join(here, '..', 'public'), { maxAge: '1h', etag: true }));
+  app.get(['/health', '/healthz'], (req, res) => res.type('text').send('ok'));
+  app.use(express.urlencoded({ extended: false, limit: '32kb' }));
+  app.use(express.json({ limit: '256kb' }));
+  app.use(auth.session);
+
+  // 公开面只有这两组：登录（含平台回调）、分享链接。其余一切都在 requireAuth 之后
+  app.use(authRoutes(deps));
+  app.use('/s', shareRoutes(deps));
+  app.use(auth.requireAuth);
+  app.use(privateRoutes(deps));
+  app.use('/admin', adminRoutes(deps));
+
+  app.use((req, res) => res.status(404).render('error', { pageTitle: '未找到', ctx: null, title: '未找到', message: '页面不存在，或你没有访问权限。' }));
+  // eslint-disable-next-line no-unused-vars
+  app.use((err, req, res, next) => {
+    const status = pathErrorStatus(err) ?? (err.status >= 400 && err.status < 500 ? err.status : 500);
+    if (status >= 500) console.error(`请求失败: ${err.name} ${err.code ?? ''}`);
+    if (res.headersSent) return res.destroy();
+    res.status(status).render('error', {
+      pageTitle: '无法访问', ctx: null, title: status === 403 ? '拒绝访问' : status === 404 ? '未找到' : '出错了',
+      message: status === 403 || status === 404 ? '页面不存在，或你没有访问权限。' : '服务暂时不可用，请稍后再试。',
+    });
+  });
+
+  return { app, ...deps, close: () => db.close() };
+}

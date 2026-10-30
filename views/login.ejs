@@ -1,0 +1,26 @@
+<%- include('partials/head') %>
+<section class="card narrow">
+  <h1>登录</h1>
+  <p class="muted">这是私有知识库，登录后才能阅读。</p>
+  <% if (error) { %><p class="alert" role="alert"><%= error %></p><% } %>
+  <% if (platformEntry) { %>
+  <div class="stack">
+    <% if (platformProblem) { %>
+    <button class="btn primary" type="button" disabled>用平台账号登录</button>
+    <p class="muted small">平台登录暂不可用：<%= platformProblem %>。请联系管理员。</p>
+    <% } else { %>
+    <a class="btn primary" href="<%= base %>/sso/login?next=<%= encodeURIComponent(next) %>">用平台账号登录</a>
+    <p class="muted small"><a href="<%= platformLogoutUrl %>">退出平台登录，换个账号</a></p>
+    <% } %>
+  </div>
+  <% } %>
+  <% if (passwordEnabled) { %>
+  <% if (platformEntry) { %><p class="muted small">或者用站点口令：</p><% } %>
+  <form method="post" action="<%= base %>/login" class="stack">
+    <input type="hidden" name="next" value="<%= next %>">
+    <label>口令<input type="password" name="password" autocomplete="current-password" required<%= platformEntry ? '' : ' autofocus' %>></label>
+    <button class="btn<%= platformEntry ? '' : ' primary' %>" type="submit">登录</button>
+  </form>
+  <% } %>
+</section>
+<%- include('partials/foot') %>

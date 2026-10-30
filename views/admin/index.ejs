@@ -1,0 +1,50 @@
+<%- include('../partials/head') %>
+<div class="page wide">
+  <h1 class="page-title">管理后台</h1>
+  <%- include('nav') %>
+  <dl class="tiles">
+    <div><dt>已索引</dt><dd><%= counts.indexed.toLocaleString('zh-CN') %></dd></div>
+    <div><dt>deny 排除</dt><dd><%= counts.denied %></dd></div>
+    <div><dt>内容敏感</dt><dd><%= counts.sensitive %></dd></div>
+    <div><dt>分享</dt><dd><%= shareCount %></dd></div>
+  </dl>
+  <h2>索引状态</h2>
+  <% if (running) { %><p class="notice" role="status">索引正在运行，刷新查看结果。</p><% } %>
+  <% if (last) { %>
+  <table class="kv">
+    <tr><th scope="row">上次索引</th><td><%= fmtTime(last.at) %></td></tr>
+    <tr><th scope="row">耗时</th><td><%= last.seconds.toFixed(2) %> 秒</td></tr>
+    <tr><th scope="row">本次处理 / 删除</th><td><%= last.processed %> / <%= last.removed %></td></tr>
+  </table>
+  <% } else { %><p class="muted">还没有索引记录。</p><% } %>
+  <form method="post" action="<%= base %>/admin/reindex" class="inline">
+    <input type="hidden" name="_csrf" value="<%= csrf %>">
+    <button class="btn" type="submit">增量索引</button>
+    <button class="btn" type="submit" name="full" value="1">全量重建</button>
+  </form>
+  <h2>访问记录</h2>
+  <p class="muted small">当前会话：<%= session.login_via === 'sso' ? `平台登录（${session.username ?? session.user_id}）` : '口令登录' %></p>
+  <% if (logins.length) { %>
+  <div class="table-wrap"><table class="grid">
+    <thead><tr><th>时间</th><th>方式</th><th>账号</th><th>结果</th><th>IP</th></tr></thead>
+    <tbody><% for (const l of logins) { %><tr><td class="nowrap"><%= fmtTime(l.ts) %></td><td><%= l.via === 'sso' ? '平台登录' : '口令' %></td><td><%= l.via === 'sso' ? `${l.username ?? '—'}（id ${l.user_id}）` : '站点主人' %></td><td><%= l.result === 'ok' ? '成功' : '已拒绝' %></td><td><%= l.ip %></td></tr><% } %></tbody>
+  </table></div>
+  <% } else { %><p class="muted">还没有登录记录。</p><% } %>
+  <h2>AI 状态</h2>
+  <% const aiStatus = { ok: '成功', cached: '命中缓存', blocked_sensitive: '敏感已拦截', off: '未启用', not_configured: '未配置', empty: '无正文' }; %>
+  <table class="kv">
+    <tr><th scope="row">通道</th><td><%= ai.channel %></td></tr>
+    <tr><th scope="row">模型</th><td><%= ai.model %></td></tr>
+    <tr><th scope="row">状态</th><td><% if (ai.problem) { %><span class="ai-bad"><%= ai.problem %></span><% } else { %>可用<% } %></td></tr>
+    <tr><th scope="row">单篇上限</th><td><%= ai.maxChars.toLocaleString('zh-CN') %> 字</td></tr>
+    <tr><th scope="row">缓存命中率</th><td><%= ai.hitRate === null ? '—' : `${ai.hitRate}%（${ai.hits} / ${ai.total}）` %>，已存 <%= ai.cacheSize %> 条</td></tr>
+  </table>
+  <h3>最近 20 次调用</h3>
+  <% if (aiLog.length) { %>
+  <div class="table-wrap"><table class="grid">
+    <thead><tr><th>时间</th><th>文件</th><th>字数</th><th>状态</th><th>耗时</th></tr></thead>
+    <tbody><% for (const l of aiLog) { %><tr><td class="nowrap"><%= fmtTime(l.ts) %></td><td><%= l.path %></td><td><%= l.chars %></td><td><%= aiStatus[l.status] ?? l.status %></td><td class="nowrap"><%= l.ms == null ? '—' : `${(l.ms / 1000).toFixed(1)} 秒` %></td></tr><% } %></tbody>
+  </table></div>
+  <% } else { %><p class="muted">还没有调用记录。</p><% } %>
+</div>
+<%- include('../partials/foot') %>

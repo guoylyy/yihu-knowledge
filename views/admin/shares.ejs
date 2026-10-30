@@ -1,0 +1,33 @@
+<%- include('../partials/head') %>
+<div class="page wide">
+  <h1 class="page-title">分享管理</h1>
+  <%- include('nav') %>
+  <h2>新建分享</h2>
+  <% if (error) { %><p class="alert" role="alert"><%= error %></p><% } %>
+  <form method="post" action="<%= base %>/admin/shares" class="stack form-card">
+    <input type="hidden" name="_csrf" value="<%= csrf %>">
+    <label>文件或目录路径
+      <input name="path" id="share-path" list="share-paths" value="<%= path %>" required autocomplete="off" placeholder="输入关键词选择">
+      <datalist id="share-paths"></datalist>
+    </label>
+    <div class="row">
+      <label>有效期
+        <select name="days"><% for (const d of expiryDays) { %><option value="<%= d %>"<%= d === 7 ? ' selected' : '' %>><%= d %> 天</option><% } %></select>
+      </label>
+      <label>访问密码（可选）<input name="password" type="text" autocomplete="off"></label>
+    </div>
+    <label class="check"><input type="checkbox" name="allow_sensitive" value="1"> 强制分享内容敏感的单个文件（仅在确认无口令外泄时勾选）</label>
+    <button class="btn primary" type="submit">生成分享</button>
+  </form>
+  <h2>全部分享（<%= shares.length %>）</h2>
+  <ul class="list">
+    <% for (const s of shares) {
+      const state = s.revoked_at ? '已取消' : s.expires_at <= now ? '已过期' : '有效'; %>
+    <li>
+      <a href="<%= base %>/admin/shares/<%= s.id %>"><strong><%= s.path %></strong></a>
+      <span class="muted small"><%= state %> · <%= s.kind === 'dir' ? '目录' : '文件' %><%= s.password_hash ? ' · 有密码' : '' %> · 访问 <%= s.visit_count %> 次 · 最近 <%= fmtTime(s.last_visit) %></span>
+    </li>
+    <% } %>
+  </ul>
+</div>
+<%- include('../partials/foot') %>

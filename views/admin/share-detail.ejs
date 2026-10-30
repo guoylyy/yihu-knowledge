@@ -1,0 +1,58 @@
+<%- include('../partials/head') %>
+<%
+  const state = share.revoked_at ? '已取消' : share.expires_at <= now ? '已过期' : '有效';
+  const W = 600, H = 120, BAR = 18, GAP = 2;
+  const totals = days.map((d) => d.views + d.downloads);
+  const peak = Math.max(1, ...totals);
+%>
+<div class="page wide">
+  <h1 class="page-title">分享详情</h1>
+  <%- include('nav') %>
+  <p><strong><%= share.path %></strong></p>
+  <p class="muted small"><%= state %> · <%= share.kind === 'dir' ? `目录，含 ${counts.included} 个文件，排除 ${counts.excluded} 个敏感文件` : '单个文件' %><%= share.password_hash ? ' · 有访问密码' : '' %> · 到期 <%= fmtTime(share.expires_at) %></p>
+  <div class="share-link">
+    <div class="qr"><%- qr %></div>
+    <div class="stack">
+      <input id="share-url" readonly value="<%= link %>" aria-label="分享链接">
+      <div class="inline">
+        <button class="btn primary" type="button" data-copy="#share-url">复制链接</button>
+        <% if (state === '有效') { %>
+        <form method="post" action="<%= base %>/admin/shares/<%= share.id %>/revoke"><input type="hidden" name="_csrf" value="<%= csrf %>"><button class="btn danger" type="submit">取消分享</button></form>
+        <% } %>
+      </div>
+    </div>
+  </div>
+  <dl class="tiles">
+    <div><dt>访问</dt><dd><%= summary.views %></dd></div>
+    <div><dt>下载</dt><dd><%= summary.downloads %></dd></div>
+    <div><dt>独立 IP</dt><dd><%= summary.ips %></dd></div>
+    <div><dt>最近访问</dt><dd class="small-dd"><%= fmtTime(summary.last_visit) %></dd></div>
+  </dl>
+  <h2>近 30 天每日访问量</h2>
+  <figure class="chart" id="trend">
+    <svg viewBox="0 0 <%= W %> <%= H + 1 %>" role="img" aria-label="近 30 天每日访问与下载次数，峰值 <%= peak %> 次">
+      <line class="axis" x1="0" x2="<%= W %>" y1="<%= H + 0.5 %>" y2="<%= H + 0.5 %>"/>
+      <% days.forEach((d, i) => {
+        const x = i * (BAR + GAP), v = totals[i], h = v ? Math.max(4, (v / peak) * (H - 4)) : 0, y = H - h;
+        const label = `${d.day}：访问 ${d.views}，下载 ${d.downloads}`; %>
+      <g data-label="<%= label %>" tabindex="0">
+        <title><%= label %></title>
+        <rect class="hit" x="<%= x %>" y="0" width="<%= BAR + GAP %>" height="<%= H %>"/>
+        <% if (h) { %><path class="bar" d="M<%= x %> <%= H %>V<%= y + 4 %>q0-4 4-4h<%= BAR - 8 %>q4 0 4 4V<%= H %>z"/><% } %>
+      </g>
+      <% }) %>
+    </svg>
+    <figcaption class="chart-axis muted small"><span><%= days[0].day %></span><span id="trend-readout">峰值 <%= peak %> 次/天</span><span><%= days.at(-1).day %></span></figcaption>
+  </figure>
+  <h2>访问明细（最近 <%= visits.length %> 条）</h2>
+  <% if (visits.length) { %>
+  <div class="table-wrap"><table class="grid visits">
+    <thead><tr><th>时间</th><th>类型</th><th>内容</th><th>IP</th><th>UA</th></tr></thead>
+    <tbody>
+    <% const kinds = { view: '访问', download: '下载', asset: '资源', auth_fail: '密码错误' }; %>
+    <% for (const v of visits) { %><tr><td class="nowrap"><%= fmtTime(v.ts) %></td><td class="nowrap"><%= kinds[v.kind] ?? v.kind %></td><td><%= v.path ?? '—' %></td><td class="nowrap"><%= v.ip %></td><td class="ua"><%= v.ua %></td></tr><% } %>
+    </tbody>
+  </table></div>
+  <% } else { %><p class="muted">还没有人访问。</p><% } %>
+</div>
+<%- include('../partials/foot') %>

@@ -1,0 +1,13 @@
+<ul>
+<% for (const d of level.dirs) { %>
+  <li>
+    <details<%= d.open ? ' open' : '' %> data-dir="<%= d.path %>"<%= d.children ? ' data-loaded' : '' %>>
+      <summary><span class="tree-dir"><%= d.name %></span></summary>
+      <% if (d.children) { %><%- include('tree-level', { level: d.children, ctx, depth: depth + 1 }) %><% } %>
+    </details>
+  </li>
+<% } %>
+<% for (const f of level.files) { %>
+  <li><a class="tree-file<%= f.active ? ' active' : '' %>" href="<%= f.href %>"<%= f.active ? ' aria-current=page' : '' %>><%= f.ext === 'md' ? f.name.slice(0, -3) : f.name %></a></li>
+<% } %>
+</ul>

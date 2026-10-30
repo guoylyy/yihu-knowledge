@@ -1,0 +1,9 @@
+<div class="table-wrap">
+<table class="grid">
+  <tbody>
+  <% rows.forEach((row, i) => { %>
+    <tr><% row.forEach((cell) => { %><% if (i === 0) { %><th><%= cell %></th><% } else { %><td><%= cell %></td><% } %><% }) %></tr>
+  <% }) %>
+  </tbody>
+</table>
+</div>
