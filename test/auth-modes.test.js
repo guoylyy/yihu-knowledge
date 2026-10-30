@@ -405,8 +405,8 @@ test('挂在 /apps/<code>/ 下：链接、跳转、cookie 路径、图片都带�
 test('/health 和 /healthz 都免登录', async () => {
   const kb = await start('sso', []);
   try {
-    assert.equal((await new Client(kb.port).get('/health')).text, 'ok');
-    assert.equal((await new Client(kb.port).get('/healthz')).text, 'ok');
+    assert.equal(JSON.parse((await new Client(kb.port).get('/health')).text).status, 'ok');
+    assert.equal(JSON.parse((await new Client(kb.port).get('/healthz')).text).status, 'ok');
   } finally {
     await kb.stop();
   }

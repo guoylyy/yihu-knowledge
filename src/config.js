@@ -68,6 +68,7 @@ export function loadSetupEnv(env = process.env) {
     ssoMissing: missing(['YH_CLIENT_ID', 'YH_CLIENT_SECRET', 'YH_WEB_URL', 'YH_API_URL']),
     platformAiMissing: missing(['YH_CLIENT_ID', 'YH_CLIENT_SECRET', 'YH_API_URL']),
     claudeBin: findClaude(env),
+    soffice: findSoffice(env),
     denyGlobs: effectiveDenyGlobs(env.KB_DENY_GLOBS),
     overrides: ['AUTH_MODE', 'KB_PASSWORD', 'KB_ALLOWED_USERS', 'KB_OWNER_NAME', 'KB_BASE_URL', 'AI_PROVIDER', 'AI_BASE_URL', 'AI_API_KEY', 'AI_MODEL'].filter((k) => env[k]),
   };

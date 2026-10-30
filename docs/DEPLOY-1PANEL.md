@@ -71,7 +71,8 @@ docker compose up -d --build
 检查一下：
 
 ```bash
-curl -s http://127.0.0.1:3030/health    # 应该输出 ok
+curl -s http://127.0.0.1:3030/health           # 应该输出 {"status":"ok","version":"…","mode":"lite","uptime":…}
+curl -s 'http://127.0.0.1:3030/health?plain=1' # 只要纯文本时用这个，输出 ok
 ```
 
 ## 第五步：反向代理和 HTTPS

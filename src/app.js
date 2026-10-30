@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import express from 'express';
+import { healthCheck, VERSION } from './about.js';
 import { createAi } from './ai.js';
 import { basePathOf, createAuth } from './auth.js';
 import { createCatalog } from './catalog.js';
@@ -87,6 +88,7 @@ export async function createApp(config, { env = process.env } = {}) {
     app.set('views', path.join(here, '..', 'views'));
     app.locals.siteName = config.siteName ?? '知识库';
     app.locals.ownerName = config.ownerName;
+    app.locals.version = VERSION;
     const dateFmt = new Intl.DateTimeFormat('zh-CN', { timeZone: config.timeZone, dateStyle: 'short', timeStyle: 'short' });
     app.locals.fmtTime = (ts) => (ts ? dateFmt.format(ts) : '—');
 
@@ -97,7 +99,7 @@ export async function createApp(config, { env = process.env } = {}) {
       next();
     });
     app.use('/assets', express.static(path.join(here, '..', 'public'), { maxAge: '1h', etag: true }));
-    app.get(['/health', '/healthz'], (req, res) => res.type('text').send('ok'));
+    app.get(['/health', '/healthz'], healthCheck(config.soffice));
     // 必须排在登录拦截之前：否则未登录时是 302 到 /login，等于告诉外人这条路径有特殊待遇
     app.all(['/setup', '/setup/{*rest}'], notFound);
     app.use(express.urlencoded({ extended: false, limit: '32kb', parameterLimit: MAX_FORM_FIELDS }));

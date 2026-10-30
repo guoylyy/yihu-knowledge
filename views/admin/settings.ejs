@@ -25,6 +25,17 @@
   <h1 class="page-title">规则与设置</h1>
   <%- include('nav') %>
 
+  <section class="form-card about" aria-labelledby="about-title">
+    <h2 id="about-title">关于</h2>
+    <table class="kv">
+      <tr><th>版本</th><td>v<%= version %></td></tr>
+      <tr><th>构建时间</th><td><%= fmtTime(about.builtAt) %></td></tr>
+      <tr><th>运行模式</th><td><%= about.mode === 'full' ? 'full（完整版，Office 可看原版）' : 'lite（精简版，Office 只显示文字）' %></td></tr>
+      <tr><th>Node</th><td><%= about.node %></td></tr>
+      <tr><th>部署方式</th><td><%= env.inDocker ? 'Docker' : '非 Docker' %></td></tr>
+    </table>
+  </section>
+
   <div class="setup settings-forms stack" id="settings-forms" data-csrf="<%= csrf %>">
     <fieldset class="form-card stack" id="settings-library">
       <legend>知识库</legend>

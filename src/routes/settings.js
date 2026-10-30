@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import { aboutInfo } from '../about.js';
 import { MIN_PASSWORD, KEY_MASK } from '../setup.js';
 import { SettingsError } from '../settings.js';
 import { allowlistMembers } from '../sso.js';
@@ -19,7 +20,7 @@ export function settingsRoutes({ db, config, auth, shares, ai, settings }) {
     res.status(status).render('admin/settings', {
       pageTitle: '设置', section: 'settings', globs: config.denyGlobs, counts: counts.get(), sensitive: sensitive.all(),
       aiChannel: ai.status().channel, aiLog: ai.recent(), trustProxy: config.trustProxy,
-      config, fields: settings.fields(), env: settings.setupEnv(), keyMask: KEY_MASK, minPassword: MIN_PASSWORD,
+      config, about: aboutInfo(config.soffice), fields: settings.fields(), env: settings.setupEnv(), keyMask: KEY_MASK, minPassword: MIN_PASSWORD,
       allowedCount: allowlistMembers(config).length, job: settings.job, changes: settings.recentChanges(),
       saved: NEXT_ANCHOR[req.query.saved] ? req.query.saved : null, failed: { section, error }, form, anomaly,
     });

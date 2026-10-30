@@ -23,3 +23,6 @@ coverage/
 .idea/
 .vscode/
 *.swp
+
+# 版本号功能的一次性验证截图，不进仓库
+docs/screenshots/version-*.png

@@ -28,6 +28,7 @@
   <a class="brand" href="<%= base %><%= signedIn ? '/' : '/login' %>"><%= siteName %></a>
   <% } %>
   <% if (signedIn) { %>
+  <span class="top-version">v<%= version %></span>
   <form class="topsearch" action="<%= base %>/search" method="get" role="search">
     <input type="search" name="q" placeholder="搜索标题和正文" aria-label="搜索" value="<%= typeof q === 'string' ? q : '' %>">
   </form>

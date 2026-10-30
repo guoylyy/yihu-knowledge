@@ -68,7 +68,8 @@ test('未配置：页面都 302 到 /setup，/setup 200，健康检查照常', a
       assert.equal(res.headers.location, '/setup');
     }
     assert.equal((await w.get('/', { 'X-Forwarded-Prefix': '/apps/knowledge' })).headers.location, '/apps/knowledge/setup');
-    assert.equal((await w.get('/health')).text, 'ok');
+    assert.equal(JSON.parse((await w.get('/health')).text).status, 'ok');
+    assert.equal((await w.get('/health?plain=1')).text, 'ok');
     const page = await w.get('/setup');
     assert.equal(page.status, 200);
     for (const text of ['1. 知识库目录', '2. 站点信息', '3. 谁能进', '4. AI']) assert.ok(page.text.includes(text), text);

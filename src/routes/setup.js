@@ -4,6 +4,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import argon2 from 'argon2';
 import express from 'express';
+import { healthCheck } from '../about.js';
 import { lastAllowlist, membersFromIds, pickAllowlist, rememberAllowlist, withMembers } from '../allowlist.js';
 import { commonHeaders, csp, MAX_FORM_FIELDS } from '../app.js';
 import { createDeny } from '../deny.js';
@@ -66,7 +67,7 @@ export function createSetupApp({ setupEnv, token, platformUsers, loadFinalConfig
   app.locals.siteName = '知识库';
   app.use(commonHeaders(csp("'self'"), ''));
   app.use('/assets', express.static(path.join(here, '..', '..', 'public'), { maxAge: '1h', etag: true }));
-  app.get(['/health', '/healthz'], (req, res) => res.type('text').send('ok'));
+  app.get(['/health', '/healthz'], healthCheck(setupEnv.soffice));
   app.use(express.urlencoded({ extended: false, limit: '32kb', parameterLimit: MAX_FORM_FIELDS }));
   app.use(express.json({ limit: '32kb' }));
 
