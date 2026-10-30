@@ -57,8 +57,17 @@
         <p class="muted small" id="password-note" hidden>已生成并显示在上面，请先存好。只保存它的 hash，忘了只能重新配置。</p>
       </div>
       <div class="stack" data-show-auth="sso both">
+        <% if (env.overrides.includes('KB_ALLOWED_USERS')) { %><p class="notice">已设置环境变量 KB_ALLOWED_USERS，白名单以它为准，这里的选择不会生效。</p><% } %>
+        <% if (picker?.available) { %>
+        <input type="hidden" name="picker" value="1">
+        <p class="muted small">勾选能进这个知识库的人。一个都不选也能保存，之后用启动日志里的设置码打开 <code>/access</code> 再加。</p>
+        <%- include('partials/user-picker', { users: picker.users, selected: picker.selected, truncated: picker.truncated }) %>
+        <% } else { %>
+        <% if (picker?.reason) { %><p class="notice" id="picker-reason">没有显示平台用户列表：<%= picker.reason %>只能手填。</p><% } %>
+        <% if (picker?.locked) { %><button class="btn" type="button" id="picker-unlock" data-url="<%= base %>/setup">用设置码加载用户列表</button><% } %>
         <label>白名单用户名（逗号分隔）<input name="allowedUsers" value="<%= form.allowedUsers ?? '' %>" autocomplete="off" autocapitalize="off" spellcheck="false"></label>
         <p class="muted small">留空 = 谁都不能进。</p>
+        <% } %>
       </div>
     </fieldset>
 
@@ -84,4 +93,5 @@
 <% } %>
 </div>
 <script src="<%= base %>/assets/setup.js" defer></script>
+<script src="<%= base %>/assets/user-picker.js" defer></script>
 <%- include('partials/foot') %>

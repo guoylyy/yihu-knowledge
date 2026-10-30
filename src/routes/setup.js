@@ -1,10 +1,11 @@
-import { randomBytes, timingSafeEqual } from 'node:crypto';
+import { timingSafeEqual } from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import argon2 from 'argon2';
 import express from 'express';
-import { commonHeaders, csp } from '../app.js';
+import { lastAllowlist, membersFromIds, pickAllowlist, rememberAllowlist, withMembers } from '../allowlist.js';
+import { commonHeaders, csp, MAX_FORM_FIELDS } from '../app.js';
 import { createDeny } from '../deny.js';
 import { createIndexRunner } from '../index-runner.js';
 import { buildConfigFile, dataDirProblem, inspectLibrary, KEY_MASK, MIN_PASSWORD, validateForm, writeConfigFile } from '../setup.js';
@@ -42,10 +43,10 @@ function publicUrl(req) {
   return /^https?$/.test(proto) && /^[\w.:[\]-]+$/.test(host ?? '') ? `${proto}://${host}${req.base}` : '';
 }
 
-export function createSetupApp({ setupEnv, loadFinalConfig, finish }) {
-  const token = randomBytes(6).toString('hex');
+export function createSetupApp({ setupEnv, token, platformUsers, loadFinalConfig, finish }) {
   const deny = createDeny(setupEnv.denyGlobs);
   const state = { phase: 'form', done: 0, total: 0, form: {}, errors: [], keyDraft: '' };
+  const previous = lastAllowlist(setupEnv.dataDir);
 
   const tokenMatches = (sent) => {
     const a = Buffer.from(String(sent ?? '').trim());
@@ -66,19 +67,34 @@ export function createSetupApp({ setupEnv, loadFinalConfig, finish }) {
   app.use(commonHeaders(csp("'self'"), ''));
   app.use('/assets', express.static(path.join(here, '..', '..', 'public'), { maxAge: '1h', etag: true }));
   app.get(['/health', '/healthz'], (req, res) => res.type('text').send('ok'));
-  app.use(express.urlencoded({ extended: false, limit: '32kb' }));
+  app.use(express.urlencoded({ extended: false, limit: '32kb', parameterLimit: MAX_FORM_FIELDS }));
   app.use(express.json({ limit: '32kb' }));
 
-  const render = (req, res, { status = 200, errors = state.errors } = {}) => res.status(status).render('setup', {
+  // /setup 配置前谁都打得开，通讯录不能跟着公开：外部访问要先过设置码
+  async function picker(req) {
+    if (state.phase !== 'form' || setupEnv.ssoMissing.length) return null;
+    if (!isLocalRequest(req) && !tokenMatches(req.body?.token ?? req.query.token)) {
+      return { available: false, locked: true, reason: '从外部打开时要先验证设置码，才能加载平台用户名单。', users: [] };
+    }
+    const dir = await platformUsers.directory();
+    if (!dir.available) return dir;
+    const lists = state.form.lists ?? previous;
+    const usernames = new Set(lists.allowedUsers);
+    const ids = new Set(lists.allowedUserIds.map(String));
+    const isSelected = (u) => ids.has(String(u.id)) || (u.username && usernames.has(u.username));
+    return { ...dir, users: dir.users.filter((u) => u.active || isSelected(u)), selected: dir.users.filter(isSelected).map((u) => String(u.id)) };
+  }
+
+  const render = async (req, res, { status = 200, errors = state.errors } = {}) => res.status(status).render('setup', {
     pageTitle: '首次配置', ctx: null, phase: state.phase, done: state.done, total: state.total,
-    form: state.form, errors, keySaved: Boolean(state.keyDraft), keyMask: KEY_MASK,
-    env: setupEnv, dataProblem: dataDirProblem(setupEnv.dataDir), minPassword: MIN_PASSWORD,
+    form: { allowedUsers: previous.allowedUsers.join(', '), ...state.form }, errors, keySaved: Boolean(state.keyDraft), keyMask: KEY_MASK,
+    env: setupEnv, dataProblem: dataDirProblem(setupEnv.dataDir), minPassword: MIN_PASSWORD, picker: await picker(req),
     needsToken: !isLocalRequest(req), token: String(req.body?.token ?? req.query.token ?? ''), publicUrl: publicUrl(req),
   });
 
   const rejectForm = (req, res, errors) => {
     state.phase = 'form';
-    render(req, res, { status: 400, errors });
+    return render(req, res, { status: 400, errors });
   };
 
   async function firstIndex() {
@@ -114,8 +130,13 @@ export function createSetupApp({ setupEnv, loadFinalConfig, finish }) {
     if (problem) return render(req, res, { status: 403, errors: [problem] });
     state.phase = 'saving'; // 先占位再 await，防止连点提交两次
     const { values, password, errors } = validateForm(req.body ?? {}, { setupEnv, keyDraft: state.keyDraft });
+    // 勾选只传 id，用户名和姓名以平台名单为准
+    if (req.body?.picker === '1') {
+      const { users } = await platformUsers.directory();
+      Object.assign(values, withMembers({}, membersFromIds(req.body.member ?? [], users)));
+    }
     const { aiApiKey, ...echo } = values;
-    state.form = { ...echo, allowedUsers: values.allowedUsers.join(', ') };
+    state.form = { ...echo, allowedUsers: values.allowedUsers.join(', '), lists: pickAllowlist(values) };
     state.keyDraft = aiApiKey;
     const dataProblem = dataDirProblem(setupEnv.dataDir);
     if (dataProblem) errors.push(dataProblem);
@@ -125,6 +146,7 @@ export function createSetupApp({ setupEnv, loadFinalConfig, finish }) {
     try {
       const passwordHash = values.authMode === 'sso' ? '' : await argon2.hash(password);
       writeConfigFile(setupEnv.configFile, buildConfigFile(values, { root: library.root, passwordHash, baseUrl: publicUrl(req) }));
+      if (values.authMode !== 'password') rememberAllowlist(setupEnv.dataDir, values);
     } catch (err) {
       return rejectForm(req, res, [`配置写不进去：${err.message}`]);
     }
@@ -132,7 +154,7 @@ export function createSetupApp({ setupEnv, loadFinalConfig, finish }) {
     Object.assign(state, { done: 0, total: library.files });
     firstIndex();
     // 直接给进度页而不是重定向：小库索引得比浏览器跟随跳转还快，再 GET /setup 就是 404 了
-    render(req, res);
+    return render(req, res);
   });
 
   // 其余一切都带回向导
@@ -145,5 +167,5 @@ export function createSetupApp({ setupEnv, loadFinalConfig, finish }) {
     res.status(500).type('text').send('服务暂时不可用，请稍后再试。');
   });
 
-  return { app, token, state };
+  return { app, state };
 }

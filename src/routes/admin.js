@@ -2,6 +2,7 @@ import { Router } from 'express';
 import QRCode from 'qrcode';
 import { configSummary } from '../config.js';
 import { getMeta } from '../db.js';
+import { allowlistMembers } from '../sso.js';
 import { ShareError, EXPIRY_DAYS } from '../shares.js';
 
 export function adminRoutes({ db, config, auth, shares, indexer, catalog, ai }) {
@@ -27,6 +28,7 @@ export function adminRoutes({ db, config, auth, shares, indexer, catalog, ai }) 
       pageTitle: '管理后台', section: 'index', counts: counts.get(), last: lastIndex(), running: indexer.running,
       shareCount: shares.list().length, ai: ai.status(), aiLog: ai.recent(20), logins: auth.recentLogins(20),
       configRows: configSummary(config), configFile: config.configFile,
+      authMode: config.authMode, allowedCount: allowlistMembers(config).length, deniedCount: auth.recentDenied(20).length,
     });
   });
 
@@ -39,7 +41,7 @@ export function adminRoutes({ db, config, auth, shares, indexer, catalog, ai }) 
     res.render('admin/settings', {
       pageTitle: '设置', section: 'settings', globs: config.denyGlobs, counts: counts.get(), sensitive: sensitive.all(),
       aiChannel: ai.status().channel, aiLog: ai.recent(), trustProxy: config.trustProxy, baseUrl: config.baseUrl,
-      authMode: config.authMode, allowedCount: config.allowedUsers.length,
+      authMode: config.authMode, allowedCount: allowlistMembers(config).length,
     });
   });
 

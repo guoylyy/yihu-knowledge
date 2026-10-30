@@ -8,6 +8,12 @@
     <div><dt>内容敏感</dt><dd><%= counts.sensitive %></dd></div>
     <div><dt>分享</dt><dd><%= shareCount %></dd></div>
   </dl>
+  <section class="form-card access-card">
+    <h2>访问权限</h2>
+    <% if (authMode === 'password') { %><p class="muted small">现在只用口令登录，不需要白名单。</p>
+    <% } else { %><p class="muted small">白名单 <%= allowedCount %> 人<%= deniedCount ? `，最近有 ${deniedCount} 条被拒绝的登录` : '' %>。在这里勾选谁能进，保存后立即生效。</p><% } %>
+    <a class="btn" href="<%= base %>/access">管理访问权限</a>
+  </section>
   <h2>索引状态</h2>
   <% if (running) { %><p class="notice" role="status">索引正在运行，刷新查看结果。</p><% } %>
   <% if (last) { %>
@@ -27,7 +33,7 @@
   <% if (logins.length) { %>
   <div class="table-wrap"><table class="grid">
     <thead><tr><th>时间</th><th>方式</th><th>账号</th><th>结果</th><th>IP</th></tr></thead>
-    <tbody><% for (const l of logins) { %><tr><td class="nowrap"><%= fmtTime(l.ts) %></td><td><%= l.via === 'sso' ? '平台登录' : '口令' %></td><td><%= l.via === 'sso' ? `${l.username ?? '—'}（id ${l.user_id}）` : '站点主人' %></td><td><%= l.result === 'ok' ? '成功' : '已拒绝' %></td><td><%= l.ip %></td></tr><% } %></tbody>
+    <tbody><% for (const l of logins) { %><tr><td class="nowrap"><%= fmtTime(l.ts) %></td><td><%= { sso: '平台登录', setup: '设置码' }[l.via] ?? '口令' %></td><td><%= l.via === 'password' ? '站点主人' : `${l.username ?? l.name ?? '—'}（id ${l.user_id ?? '—'}）` %></td><td><%= l.result === 'ok' ? '成功' : '已拒绝' %></td><td><%= l.ip %></td></tr><% } %></tbody>
   </table></div>
   <% } else { %><p class="muted">还没有登录记录。</p><% } %>
   <h2>AI 状态</h2>

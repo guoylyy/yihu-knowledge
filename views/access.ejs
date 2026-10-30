@@ -1,0 +1,72 @@
+<%- include('partials/head') %>
+<div class="page wide access" data-strip-token>
+  <h1 class="page-title">访问权限</h1>
+  <% if (session) { %><%- include('admin/nav') %><% } %>
+  <% if (temporary) { %><p class="notice" role="status">这是设置码打开的临时管理会话：30 分钟有效，只能访问这个页面。保存后结束；如果你刚被拒绝过、并把自己加了进去，会直接转成正式登录。</p><% } %>
+  <% if (saved) { %><p class="notice" role="status">已保存，立即生效，不用重启。</p><% } %>
+  <% if (error) { %><p class="alert" role="alert"><%= error %></p><% } %>
+  <% if (envControlled) { %>
+  <p class="notice" role="status">当前由环境变量 KB_ALLOWED_USERS 控制，改这里不会生效。<br>改用界面管理：去掉环境变量 KB_ALLOWED_USERS 并重启，之后就能在这里勾选。</p>
+  <% } else if (!hasSso) { %>
+  <p class="notice" role="status">现在只用口令登录，白名单不起作用。要让平台用户进来，先把 AUTH_MODE 改成 sso 或 both。</p>
+  <% } %>
+
+  <h2>当前白名单（<%= members.length %>）</h2>
+  <% if (members.length) { %>
+  <ul class="members">
+    <% for (const m of members) { %>
+    <li>
+      <%- include('partials/user-avatar', { user: m }) %>
+      <span class="person"><strong><%= m.name || m.username || `用户 ${m.id}` %></strong><small class="muted"><%= m.username || `id ${m.id}` %></small></span>
+      <% if (editable) { %>
+      <form method="post" action="<%= base %>/access/remove">
+        <input type="hidden" name="_csrf" value="<%= csrf %>">
+        <input type="hidden" name="key" value="<%= m.key %>">
+        <button class="btn danger" type="submit" aria-label="移除 <%= m.name || m.username || m.id %>">移除</button>
+      </form>
+      <% } %>
+    </li>
+    <% } %>
+  </ul>
+  <% } else { %><p class="muted">白名单是空的，所有平台账号都进不来。</p><% } %>
+
+  <% if (editable) { %>
+  <h2>添加成员</h2>
+  <form method="post" action="<%= base %>/access/add" class="stack form-card">
+    <input type="hidden" name="_csrf" value="<%= csrf %>">
+    <% if (directory.available) { %>
+    <% if (candidates.length) { %>
+    <%- include('partials/user-picker', { users: candidates, selected: [], truncated: directory.truncated }) %>
+    <button class="btn primary" type="submit">保存</button>
+    <% } else { %><p class="muted">平台上的人都已经在白名单里了。</p><% } %>
+    <% } else { %>
+    <p class="notice">没有显示平台用户列表：<%= directory.reason %>。可以手填用户名或用户 id。</p>
+    <label>用户名或 id（逗号分隔）<input name="manual" autocomplete="off" autocapitalize="off" spellcheck="false"></label>
+    <button class="btn primary" type="submit">保存</button>
+    <% } %>
+  </form>
+  <% } %>
+
+  <% if (hasSso) { %>
+  <h2>最近被拒绝的登录</h2>
+  <% if (denied.length) { %>
+  <ul class="members">
+    <% for (const d of denied) { %>
+    <li>
+      <span class="person"><strong><%= d.name || d.username || `用户 ${d.user_id}` %></strong><small class="muted"><%= d.username || `id ${d.user_id}` %> · <%= fmtTime(d.ts) %></small></span>
+      <% if (d.listed) { %><span class="muted small">已在白名单</span>
+      <% } else if (editable) { %>
+      <form method="post" action="<%= base %>/access/approve">
+        <input type="hidden" name="_csrf" value="<%= csrf %>">
+        <input type="hidden" name="log" value="<%= d.id %>">
+        <button class="btn" type="submit">加入白名单</button>
+      </form>
+      <% } %>
+    </li>
+    <% } %>
+  </ul>
+  <% } else { %><p class="muted">还没有被拒绝的登录。</p><% } %>
+  <% } %>
+</div>
+<script src="<%= base %>/assets/user-picker.js" defer></script>
+<%- include('partials/foot') %>

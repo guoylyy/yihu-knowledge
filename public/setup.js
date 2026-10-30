@@ -89,6 +89,12 @@
     }
   });
 
+  $('#picker-unlock')?.addEventListener('click', (event) => {
+    const token = $('#setup-token').value.trim();
+    if (token) location.href = `${event.currentTarget.dataset.url}?token=${encodeURIComponent(token)}`;
+    else $('#setup-token').focus();
+  });
+
   const ALPHABET = 'abcdefghjkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789';
   $('#setup-generate').addEventListener('click', () => {
     const limit = 256 - (256 % ALPHABET.length); // 丢弃尾部，避免取模偏差

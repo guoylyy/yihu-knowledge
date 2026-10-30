@@ -113,7 +113,7 @@ export function validateForm(form, { setupEnv, keyDraft = '' }) {
   const typedKey = text('aiApiKey');
   const values = {
     root: text('root'), siteName: text('siteName') || '知识库', ownerName: text('ownerName') || '管理员',
-    authMode, allowedUsers: splitList(text('allowedUsers')), aiProvider, aiBaseUrl: text('aiBaseUrl'), aiModel: text('aiModel'),
+    authMode, allowedUsers: splitList(text('allowedUsers')), allowedUserIds: [], allowedProfiles: {}, aiProvider, aiBaseUrl: text('aiBaseUrl'), aiModel: text('aiModel'),
     aiApiKey: typedKey && typedKey !== KEY_MASK ? typedKey : keyDraft,
   };
 
@@ -144,6 +144,7 @@ export function buildConfigFile(values, { root, passwordHash, baseUrl }) {
     root, siteName: values.siteName, ownerName: values.ownerName, authMode: values.authMode,
     ...(passwordHash ? { passwordHash } : {}),
     allowedUsers: values.authMode === 'password' ? [] : values.allowedUsers,
+    ...(values.authMode === 'password' ? {} : { allowedUserIds: values.allowedUserIds, allowedProfiles: values.allowedProfiles }),
     ...(baseUrl ? { baseUrl } : {}),
     ai: {
       provider: values.aiProvider, baseUrl: openai ? values.aiBaseUrl : '', apiKey: openai ? values.aiApiKey : '', model: openai ? values.aiModel : '',

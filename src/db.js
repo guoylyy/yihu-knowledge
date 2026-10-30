@@ -109,6 +109,7 @@ CREATE TABLE IF NOT EXISTS ai_cache (
 `;
 const AI_LOG_ADDED = { mode: 'TEXT', model: 'TEXT', ms: 'INTEGER' };
 const SESSIONS_ADDED = { login_via: "TEXT NOT NULL DEFAULT 'password'", username: 'TEXT', user_id: 'TEXT' };
+const LOGIN_LOG_ADDED = { name: 'TEXT' };
 
 function addColumns(db, table, added) {
   const columns = db.pragma(`table_info(${table})`).map((c) => c.name);
@@ -127,6 +128,7 @@ export function openDb(dataDir) {
   db.exec(SCHEMA);
   addColumns(db, 'ai_log', AI_LOG_ADDED);
   addColumns(db, 'sessions', SESSIONS_ADDED);
+  addColumns(db, 'login_log', LOGIN_LOG_ADDED);
   return db;
 }
 

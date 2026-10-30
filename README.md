@@ -60,12 +60,7 @@ npm start                         # 打开 http://localhost:3030
 仓库根目录的 `yh-app.json` 是应用清单：`code` 为 `knowledge`，地址是 `<平台地址>/apps/knowledge/`，默认 `AUTH_MODE=sso`，库放在 `/data/library`，数据库放在 `/data/db`。
 
 1. 在平台「管理 → 应用 → 从 Git 安装应用」安装本仓库（或在服务器上 `yh add` + `yh up`）。`YH_CLIENT_ID`、`YH_CLIENT_SECRET`、`YH_WEB_URL`、`YH_API_URL`、`YH_APP_URL` 由平台自动注入。
-2. 在服务器的 `apps/knowledge/.env` 写上白名单，然后重启应用：
-
-   ```bash
-   KB_ALLOWED_USERS=你的平台账号
-   ```
-
+2. 决定谁能进：看应用的启动日志，白名单为空时会打出设置码。用平台账号登录一次（会看到 403），再打开 `/apps/knowledge/access?token=<设置码>`，在列表里勾上自己保存，就转成正式登录了。之后在 `/access`（后台「访问权限」）勾选其他人，保存后立即生效，不用重启。走向导部署的，在第三步直接勾选。
 3. 把笔记同步到宿主机的 `apps/knowledge/data/library/`，在后台点「增量索引」，或等 30 分钟一次的自动扫描。
 
 平台把 `/apps/knowledge/` 前缀剥掉再转发，并通过 `X-Forwarded-Prefix` 告诉应用；页面链接、跳转和 cookie 路径都会带上它，不用额外配置。
@@ -79,14 +74,16 @@ SSO 登录走平台的 OAuth2 授权码流程：`/sso/login` 跳平台授权页�
 | 部署方式 | `AUTH_MODE` | 怎么进 |
 |---|---|---|
 | 独立部署 | `password`（默认） | 一个口令。一个人部署一个人用，简单最要紧 |
-| 平台部署 | `sso` | 平台账号，且在 `KB_ALLOWED_USERS` 里 |
+| 平台部署 | `sso` | 平台账号，且在白名单里 |
 | 过渡或兜底 | `both` | 两个入口都开。口令是给站点主人的，不受白名单限制 |
 
 平台只回答「他是谁」，「他能不能进」由白名单决定。平台上的同事默认都进不来：
 
-- 白名单按平台 `username` 或用户 `id` 精确匹配，大小写敏感。只用钉钉等方式登录的人没有 `username`，要填 `id`；被拒绝的页面上会显示这个 id。
-- 白名单为空时一律拒绝，不存在「没配置就全放行」。
-- 把人移出白名单并重启后，他已有的会话在下一次请求时就失效。
+- 在 `/access` 从平台用户列表里勾选。最近被拒绝的登录也列在那里，点一下「加入白名单」就放行。保存写进 `config.json`，立即生效。
+- 同时保存 `allowedUsers`（username）和 `allowedUserIds`（id），任一匹配即放行，平台改用户名不会失效。匹配是精确的，大小写敏感。
+- 白名单为空时一律拒绝，不存在「没配置就全放行」。这时可以用启动日志里的设置码打开 `/access?token=<设置码>`：得到一个 30 分钟的临时会话，只能访问这一页，保存后结束。设置码每次启动都换，白名单有人之后不再生效，连错 5 次锁 15 分钟。
+- 把人移出白名单后，他已有的会话在下一次请求时就失效。平台登录的人不能把自己移出去。
+- **高级用法**：设了 `KB_ALLOWED_USERS` 后整份白名单都以它为准（填 username 或 id），`/access` 变成只读，`config.json` 里的名单不再生效，改动要重启。自动化部署时才需要；去掉它并重启就回到界面管理。
 - 平台会话 8 小时过期，之后再走一次授权；所以平台上停用的账号最多再放行 8 小时。
 - 每次登录和被拒绝都记在后台「访问记录」里。
 
@@ -108,7 +105,7 @@ SSO 登录走平台的 OAuth2 授权码流程：`/sso/login` 跳平台授权页�
 |---|---|---|
 | `AUTH_MODE` | `password` | `password` / `sso` / `both`，其他值启动失败 |
 | `KB_PASSWORD` | 向导填写 | 环境变量部署时 `password`、`both` 必填，缺了启动失败。至少 8 位（向导要求至少 10 位），或直接填 argon2 hash。`sso` 时不生效 |
-| `KB_ALLOWED_USERS` | 空 | 平台 username 或用户 id，逗号分隔。空 = 全部拒绝 |
+| `KB_ALLOWED_USERS` | 空 | 高级用法，自动化部署时用。平时在 `/access` 勾选；一旦设了，界面只读。空 = 用界面管理的名单 |
 
 ### 站点
 
@@ -164,12 +161,12 @@ SSO 登录走平台的 OAuth2 授权码流程：`/sso/login` 跳平台授权页�
 - **AI 只发当前一篇**：总结和追问都只带这一篇（或选中的片段），内嵌图片会被剥掉。相同内容命中本地缓存，不重复发送。模型回答按不可信内容渲染，不开 HTML 和图片。`claude-cli` 通道以 `--safe-mode --tools ""` 运行，模型没有任何工具，子进程也拿不到 `KB_*`、`AI_*`、`YH_*` 环境变量。
 - **`KB_TRUST_PROXY` 要等于实际代理层数**：设大了，客户端能伪造 IP 绕过登录锁定；设小了，所有人共用一个 IP，一次爆破会把主人也锁在外面。
 - **`data/` 等同于笔记本身**：里面有全文索引和 `config.json`，备份和迁移时按敏感数据对待。库目录不能包含数据目录，否则配置文件会被当成笔记索引，向导会拒绝。
-- **未配置的实例不要长期暴露**：向导期间任何人都能打开 `/setup`，但提交和目录检测要么来自本机，要么带启动日志里的设置码。配置完成后这组接口整体消失。
+- **未配置的实例不要长期暴露**：向导期间任何人都能打开 `/setup`，但提交、目录检测和平台用户列表要么来自本机，要么带启动日志里的设置码。配置完成后这组接口整体消失。
 
 ## 已知限制
 
 - Office 文件只有文本预览，不保留版式；老格式 `.doc` / `.ppt` 不支持预览。
-- SSO 白名单要手工维护，改完要重启，后台不能改。
+- 进来的人都能打开 `/access` 改白名单，没有单独的管理员角色。
 - 向导只运行一次。改单项配置用环境变量，或编辑 `config.json` 后重启。
 - 没有多租户：一个实例一个库，进来的人权限完全相同。
 - 只读：应用不修改笔记，编辑仍在你自己的工具里做。
@@ -206,7 +203,7 @@ npm run screenshots:setup  # 配置向导截图，顺带在真浏览器里走一
 A self-hosted, mobile-first reader for a folder of Markdown notes: Obsidian-style wiki links, a link graph, controlled sharing with access logs, and per-note AI summaries.
 
 - **Standalone**: run `npm start` or the Docker image and open `/setup`. A four-step wizard writes `data/config.json` (mode 600) and runs the first index. Inside Docker, enter the container path (`/library`); unless you are on the server itself, the wizard asks for the setup code printed in the startup log. Delete `config.json` and restart to reconfigure. Environment variables override `config.json`, and `docker compose` deployments that set `KB_ROOT` skip the wizard.
-- **On Yihu One**: `AUTH_MODE=sso`. Platform login plus an explicit allowlist, `KB_ALLOWED_USERS` (usernames or user ids). An empty list denies everyone. `AUTH_MODE=both` enables both entry points.
+- **On Yihu One**: `AUTH_MODE=sso`. Platform login plus an explicit allowlist, picked from the platform's user list at `/access` and effective immediately. An empty list denies everyone; the setup code in the startup log opens `/access?token=<code>` to add the first member. `KB_ALLOWED_USERS` (usernames or user ids) is for automated deployments: when set it overrides the UI, which turns read-only. `AUTH_MODE=both` enables both entry points.
 - **AI**: uses the platform model when `YH_CLIENT_ID` and `YH_CLIENT_SECRET` are set, otherwise any OpenAI-compatible API, the local `claude` CLI, or off. `AI_PROVIDER` overrides the choice. Only the current note is sent, and notes that look like they contain secrets are never sent.
 - **Limits**: single library per instance, no per-user permissions, the allowlist is edited by hand, Office files get text-only previews.
 

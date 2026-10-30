@@ -8,9 +8,11 @@ import { createCatalog } from './catalog.js';
 import { openDb } from './db.js';
 import { createDeny } from './deny.js';
 import { createIndexRunner } from './index-runner.js';
+import { createPlatformUsers } from './platform-users.js';
 import { pathErrorStatus, createReader } from './reader.js';
 import { createShares } from './shares.js';
 import { createSso } from './sso.js';
+import { accessRoutes } from './routes/access.js';
 import { adminRoutes } from './routes/admin.js';
 import { authRoutes } from './routes/auth.js';
 import { privateRoutes } from './routes/private.js';
@@ -21,6 +23,9 @@ export const csp = (formTargets) => [
   "default-src 'none'", "script-src 'self'", "style-src 'self'", "img-src 'self' data: https:", "media-src 'self'",
   "frame-src 'self'", "connect-src 'self'", `form-action ${formTargets}`, "base-uri 'none'", "frame-ancestors 'self'",
 ].join('; ');
+
+// 用户勾选列表每人一个字段，平台名单上限 2000 人；默认的 1000 不够
+export const MAX_FORM_FIELDS = 3000;
 
 // 向导和正式应用共用：路径前缀 + 安全响应头
 export const commonHeaders = (policy, baseUrl) => (req, res, next) => {
@@ -51,7 +56,8 @@ export async function createApp(config) {
   const ai = createAi({ db, config });
   const indexer = createIndexRunner(config);
   const sso = config.sso && !config.sso.problem ? createSso(config.sso) : null;
-  const deps = { db, config, deny, realRoot, catalog, auth, shares, reader, ai, indexer, sso };
+  const platformUsers = createPlatformUsers(config.sso ?? {});
+  const deps = { db, config, deny, realRoot, catalog, auth, shares, reader, ai, indexer, sso, platformUsers };
   // 「退出平台登录」是表单提交后 303 到平台，Chrome 的 form-action 连重定向目标一起管
   const CSP = csp(sso ? `'self' ${new URL(config.sso.webUrl).origin}` : "'self'");
 
@@ -70,13 +76,15 @@ export async function createApp(config) {
   app.get(['/health', '/healthz'], (req, res) => res.type('text').send('ok'));
   // 必须排在登录拦截之前：否则未登录时是 302 到 /login，等于告诉外人这条路径有特殊待遇
   app.all(['/setup', '/setup/{*rest}'], notFound);
-  app.use(express.urlencoded({ extended: false, limit: '32kb' }));
+  app.use(express.urlencoded({ extended: false, limit: '32kb', parameterLimit: MAX_FORM_FIELDS }));
   app.use(express.json({ limit: '256kb' }));
   app.use(auth.session);
 
   // 公开面只有这两组：登录（含平台回调）、分享链接。其余一切都在 requireAuth 之后
   app.use(authRoutes(deps));
   app.use('/s', shareRoutes(deps));
+  // 要接住设置码和临时会话，所以排在 requireAuth 前面，自己把关
+  app.use('/access', accessRoutes(deps));
   app.use(auth.requireAuth);
   app.use(privateRoutes(deps));
   app.use('/admin', adminRoutes(deps));

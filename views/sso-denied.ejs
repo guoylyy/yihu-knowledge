@@ -2,10 +2,11 @@
 <section class="card narrow">
   <h1>没有访问权限</h1>
   <% if (unconfigured) { %>
-  <p class="alert" role="alert">管理员还没有配置允许访问的人（KB_ALLOWED_USERS 为空），所以任何平台账号都进不来。</p>
+  <p class="alert" role="alert">管理员还没有配置允许访问的人（白名单为空），所以任何平台账号都进不来。</p>
   <p class="muted">你的平台账号：<%= account %></p>
+  <p class="muted small">管理员可用启动日志里的设置码打开 <code><%= base %>/access?token=&lt;设置码&gt;</code> 添加成员。</p>
   <% } else { %>
-  <p class="alert" role="alert">你的平台账号（<%= account %>）没有访问这个知识库的权限，请联系管理员把你加进 KB_ALLOWED_USERS</p>
+  <p class="alert" role="alert">你的平台账号（<%= account %>）没有访问这个知识库的权限，请联系管理员把你加进白名单</p>
   <% } %>
   <p class="muted small">平台用户 id：<%= userId %></p>
   <p class="muted small"><a href="<%= platformLogoutUrl %>">退出平台登录，换个账号</a></p>

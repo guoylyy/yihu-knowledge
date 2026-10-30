@@ -167,7 +167,7 @@ test('sso：不在白名单 → 403，文案含用户名，不建会话，留拒
     const c = new Client(kb.port, '10.2.1.4');
     const { res } = await ssoLogin(c, 'bob');
     assert.equal(res.status, 403);
-    assert.match(res.text, /你的平台账号（bob）没有访问这个知识库的权限，请联系管理员把你加进 KB_ALLOWED_USERS/);
+    assert.match(res.text, /你的平台账号（bob）没有访问这个知识库的权限，请联系管理员把你加进白名单/);
     assert.match(res.text, /退出平台登录/);
     assert.equal(c.cookies.get('kb_sid'), undefined);
     assert.equal(kb.db.prepare('SELECT COUNT(*) FROM sessions').pluck().get(), 0);
@@ -300,7 +300,7 @@ test('未配置平台凭证：有启动警告，登录页禁用入口并说明�
   const config = loadConfig({ KB_ROOT: '/tmp', AUTH_MODE: 'both', KB_PASSWORD: 'x'.repeat(8) });
   assert.match(config.sso.problem, /YH_CLIENT_ID \/ YH_CLIENT_SECRET/);
   assert.ok(authWarnings(config).some((w) => /平台登录入口已禁用/.test(w)));
-  assert.ok(authWarnings(config).some((w) => /KB_ALLOWED_USERS 为空/.test(w)));
+  assert.ok(authWarnings(config).some((w) => /白名单为空/.test(w)));
   assert.deepEqual(authWarnings(loadConfig({ KB_ROOT: '/tmp' })), []);
 
   const kb = await startServer({ authMode: 'both', sso: config.sso });

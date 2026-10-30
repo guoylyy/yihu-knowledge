@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { findClaude, resolveProvider } from './ai-providers.js';
+import { allowlistMembers } from './sso.js';
 
 export const DEFAULT_DENY = [
   '.obsidian/', '.git/', '.tmp.*/', 'node_modules/', '.vmark/', '.trash/', '.DS_Store',
@@ -85,6 +86,16 @@ function loadSso(env, authMode, fileBaseUrl) {
   return { ...sso, problem: missing.length ? `未配置 ${missing.join(' / ')}` : null };
 }
 
+// KB_ALLOWED_USERS 非空时整份白名单都听它的，config.json 里的 id 也不能再放人进来
+function allowlistOf(env, file, pick, sources) {
+  const fromEnv = splitList(env.KB_ALLOWED_USERS);
+  const allowedUsers = pick('allowedUsers', fromEnv.length ? fromEnv : '', file?.allowedUsers, []);
+  if (fromEnv.length) return { allowedUsers, allowedUserIds: [], allowedProfiles: {} };
+  const allowedUserIds = Array.isArray(file?.allowedUserIds) ? file.allowedUserIds : [];
+  if (allowedUserIds.length) sources.allowedUsers = 'file';
+  return { allowedUsers, allowedUserIds, allowedProfiles: file?.allowedProfiles ?? {} };
+}
+
 // 优先级：环境变量 > config.json > 默认值。空字符串算没设，docker compose 会把没填的变量传成空串
 export function loadConfig(env = process.env) {
   const file = readConfigFile(env);
@@ -111,7 +122,7 @@ export function loadConfig(env = process.env) {
     configFile: file ? configFileOf(env) : null,
     password: pick('password', env.KB_PASSWORD, file?.passwordHash),
     authMode,
-    allowedUsers: pick('allowedUsers', env.KB_ALLOWED_USERS && splitList(env.KB_ALLOWED_USERS), file?.allowedUsers, []),
+    ...allowlistOf(env, file, pick, sources),
     sso: loadSso(env, authMode, file?.baseUrl),
     baseUrl,
     port,
@@ -151,7 +162,7 @@ export function configSummary(config) {
     ['对外地址', 'baseUrl', config.baseUrl],
     ['登录方式', 'authMode', config.authMode],
     ['登录口令', 'password', isSet(config.password)],
-    ['白名单', 'allowedUsers', `${config.allowedUsers.length} 人`],
+    ['白名单', 'allowedUsers', `${allowlistMembers(config).length} 人`],
     ['AI 通道', 'aiProvider', config.aiProvider],
     ['AI 接口地址', 'aiBaseUrl', config.aiBaseUrl || '—'],
     ['AI Key', 'aiApiKey', isSet(config.aiApiKey)],
@@ -163,7 +174,7 @@ export function configSummary(config) {
 export function authWarnings(config) {
   const out = [];
   if (config.sso?.problem) out.push(`AUTH_MODE=${config.authMode} 但${config.sso.problem}，平台登录入口已禁用`);
-  if (config.sso && !config.allowedUsers.length) out.push('KB_ALLOWED_USERS 为空，所有平台账号都会被拒绝');
+  if (config.sso && !allowlistMembers(config).length) out.push('白名单为空，所有平台账号都会被拒绝');
   if (config.authMode === 'sso' && config.password) out.push('AUTH_MODE=sso 时 KB_PASSWORD 不生效，口令登录已关闭');
   if (config.configFile && !config.cookieSecure) out.push(`对外地址是 ${config.baseUrl}，登录 cookie 不带 Secure。公网部署请走 HTTPS，并设 KB_BASE_URL`);
   return out;

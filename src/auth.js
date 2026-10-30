@@ -1,13 +1,17 @@
 import { createHash, randomBytes, timingSafeEqual } from 'node:crypto';
 import argon2 from 'argon2';
 import { getMeta, setMeta } from './db.js';
-import { isAllowed } from './sso.js';
+import { allowlistMembers, isAllowed } from './sso.js';
 
 export const MAX_FAILS = 5;
 export const LOCK_MS = 15 * 60 * 1000;
 export const SESSION_MS = 14 * 24 * 60 * 60 * 1000;
 // 平台账号被停用后，这里最多再放行这么久
 export const SSO_SESSION_MS = 8 * 60 * 60 * 1000;
+// 设置码换来的临时管理会话，以及被拒绝的平台用户身份，都只留这么久
+export const SETUP_SESSION_MS = 30 * 60 * 1000;
+const MAX_DENIED = 1000;
+export const DENIED_COOKIE = 'kb_denied';
 const LOGIN_LOG_KEEP = 5000;
 const BASE_PATH = /^\/apps\/[a-z0-9-]+$/;
 export const SESSION_COOKIE = 'kb_sid';
@@ -95,17 +99,19 @@ export function createAuth({ db, config }) {
     const id = randomBytes(32).toString('base64url');
     const csrf = randomBytes(32).toString('base64url');
     const now = Date.now();
-    const maxAge = via === 'sso' ? SSO_SESSION_MS : SESSION_MS;
+    const maxAge = { sso: SSO_SESSION_MS, setup: SETUP_SESSION_MS }[via] ?? SESSION_MS;
     db.prepare('INSERT INTO sessions (id_hash, csrf, created_at, expires_at, login_via, username, user_id) VALUES (?, ?, ?, ?, ?, ?, ?)')
       .run(hashId(id), csrf, now, now + maxAge, via, username, userId);
-    return { id, maxAge };
+    return { id, csrf, maxAge };
   }
 
-  const logLogin = db.prepare('INSERT INTO login_log (ts, via, username, user_id, ip, ua, result) VALUES (?, ?, ?, ?, ?, ?, ?)');
-  const recordLogin = (req, { via, username = null, userId = null, result }) => {
-    logLogin.run(Date.now(), via, username, userId, req.ip, (req.get('user-agent') ?? '').slice(0, 256), result);
+  const logLogin = db.prepare('INSERT INTO login_log (ts, via, username, name, user_id, ip, ua, result) VALUES (?, ?, ?, ?, ?, ?, ?, ?)');
+  const recordLogin = (req, { via, username = null, name = null, userId = null, result }) => {
+    logLogin.run(Date.now(), via, username, name, userId, req.ip, (req.get('user-agent') ?? '').slice(0, 256), result);
   };
   const recent = db.prepare('SELECT * FROM login_log ORDER BY id DESC LIMIT ?');
+  const recentDenied = db.prepare("SELECT * FROM login_log WHERE via = 'sso' AND result = 'denied' ORDER BY id DESC LIMIT ?");
+  const deniedEntry = db.prepare("SELECT * FROM login_log WHERE id = ? AND via = 'sso' AND result = 'denied'");
 
   async function login(password, ip) {
     const key = `login:${ip}`;
@@ -124,14 +130,20 @@ export function createAuth({ db, config }) {
 
   // 每次请求都按当前配置复核：改 AUTH_MODE 或把人移出白名单后，旧会话立刻失效，不用等到期
   const stillAllowed = (row) => (row.login_via === 'sso'
-    ? Boolean(config.sso) && isAllowed({ username: row.username, id: row.user_id }, config.allowedUsers)
+    ? Boolean(config.sso) && isAllowed({ username: row.username, id: row.user_id }, config)
     : passwordEnabled);
+
+  // 设置码只用来打破「白名单为空谁都进不来」，有人之后就没用了
+  const canBootstrap = () => Boolean(config.sso) && !allowlistMembers(config).length;
 
   function session(req, res, next) {
     const id = parseCookies(req)[SESSION_COOKIE];
     const row = id ? findSession.get(hashId(id), Date.now()) ?? null : null;
-    if (row && !stillAllowed(row)) dropSession.run(row.id_hash);
-    req.session = row && stillAllowed(row) ? row : null;
+    // 临时会话不放进 req.session：除了 /access，其余路由都当它没登录
+    const setup = row?.login_via === 'setup';
+    if (row && (setup ? !canBootstrap() : !stillAllowed(row))) dropSession.run(row.id_hash);
+    req.setupSession = setup && canBootstrap() ? row : null;
+    req.session = row && !setup && stillAllowed(row) ? row : null;
     res.locals.session = req.session;
     res.locals.csrf = req.session?.csrf ?? null;
     next();
@@ -145,7 +157,7 @@ export function createAuth({ db, config }) {
 
   function requireCsrf(req, res, next) {
     const sent = String(req.get('x-csrf-token') ?? req.body?._csrf ?? '');
-    const expected = req.session?.csrf ?? '';
+    const expected = (req.session ?? req.setupSession)?.csrf ?? '';
     const a = Buffer.from(sent);
     const b = Buffer.from(expected);
     if (expected && a.length === b.length && timingSafeEqual(a, b)) return next();
@@ -157,9 +169,27 @@ export function createAuth({ db, config }) {
     res.clearCookie(SESSION_COOKIE, cookieOptions(undefined, req.base));
   }
 
+  // 被拒绝的人还没有会话，但转正临时会话时要知道他是谁。这个身份来自平台回调，只在内存里放 30 分钟
+  const denied = new Map();
+  function rememberDenied(res, req, who) {
+    const now = Date.now();
+    for (const [key, entry] of denied) {
+      if (entry.expires <= now || denied.size >= MAX_DENIED) denied.delete(key);
+    }
+    const id = randomBytes(32).toString('base64url');
+    denied.set(id, { ...who, expires: now + SETUP_SESSION_MS });
+    res.cookie(DENIED_COOKIE, id, cookieOptions(SETUP_SESSION_MS, req.base));
+  }
+  function deniedIdentity(req) {
+    const entry = denied.get(parseCookies(req)[DENIED_COOKIE]);
+    return entry && entry.expires > Date.now() ? entry : null;
+  }
+
   return {
     init, login, createSession, recordLogin, recentLogins: (limit = 20) => recent.all(limit),
-    session, requireAuth, requireCsrf, logout, cookieOptions, throttle,
+    recentDenied: (limit = 20) => recentDenied.all(limit), deniedEntry: (id) => deniedEntry.get(id) ?? null,
+    session, requireAuth, requireCsrf, logout, cookieOptions, throttle, canBootstrap, rememberDenied, deniedIdentity,
+    dropSession: (row) => dropSession.run(row.id_hash),
   };
 }
 

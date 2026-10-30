@@ -1,0 +1,17 @@
+<div class="picker" data-picker>
+  <input type="search" data-picker-search placeholder="搜索姓名、用户名、号码" aria-label="搜索平台用户" autocomplete="off" autocapitalize="off" spellcheck="false">
+  <% if (truncated) { %><p class="notice">平台用户太多，这里只列出前 2000 人。</p><% } %>
+  <ul class="picker-list">
+    <% for (const u of users) { const job = [u.dept, u.title].filter(Boolean).join(' · '); %>
+    <li data-search="<%= [u.name, u.username, u.jobNumber, u.mobile].filter(Boolean).join(' ').toLowerCase() %>">
+      <label class="picker-row">
+        <input type="checkbox" name="member" value="<%= u.id %>"<%= selected.includes(String(u.id)) ? ' checked' : '' %>>
+        <%- include('user-avatar', { user: u }) %>
+        <span class="person"><strong><%= u.name || u.username || `用户 ${u.id}` %></strong><small class="muted"><%= [u.username, job].filter(Boolean).join(' / ') %></small></span>
+      </label>
+    </li>
+    <% } %>
+  </ul>
+  <p class="muted small" data-picker-empty hidden>没有匹配的人。</p>
+  <p class="picker-foot small" role="status">已选 <strong data-picker-count><%= selected.length %></strong> 人</p>
+</div>

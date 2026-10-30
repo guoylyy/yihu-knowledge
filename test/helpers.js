@@ -61,6 +61,8 @@ export function testConfig(lib, overrides = {}) {
     password: PASSWORD,
     authMode: 'password',
     allowedUsers: [],
+    allowedUserIds: [],
+    allowedProfiles: {},
     sso: null,
     baseUrl: 'https://kb.example.com',
     port: 0,

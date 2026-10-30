@@ -305,3 +305,23 @@ input:not([type="checkbox"]), select { min-height: 42px; padding: 0 10px; border
 .setup .choice span { display: flex; flex-direction: column; min-width: 0; }
 .setup .choice small { font-size: .8rem; }
 .setup progress { display: block; width: 100%; height: 10px; accent-color: var(--accent); }
+
+/* 平台用户勾选列表与访问权限页 */
+.picker { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.picker-list { list-style: none; margin: 0; padding: 0; max-height: 22rem; overflow-y: auto; border: 1px solid var(--border); border-radius: 8px; }
+.picker-list li + li { border-top: 1px solid var(--border); }
+.picker-list li[hidden], .picker [hidden] { display: none; }
+.picker label.picker-row { flex-direction: row; align-items: center; gap: 10px; min-height: 52px; padding: 6px 10px; color: var(--text); font-size: 1rem; cursor: pointer; }
+.picker-row input { flex: none; width: 20px; min-height: 20px; margin: 0; accent-color: var(--accent); }
+.picker-foot { margin: 0; }
+.avatar { position: relative; flex: none; display: inline-flex; align-items: center; justify-content: center; width: 34px; height: 34px; overflow: hidden; border-radius: 50%; background: var(--surface-2); color: var(--muted); font-size: .9rem; font-weight: 600; }
+.avatar img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.person { display: flex; flex-direction: column; flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.person strong { font-weight: 600; }
+.person small { font-size: .8rem; }
+.members { list-style: none; margin: 0 0 12px; padding: 0; }
+.members li { display: flex; align-items: center; gap: 10px; padding: 8px 0; border-bottom: 1px solid var(--border); }
+.members form { flex: none; margin: 0; }
+.access-card { margin-bottom: 8px; }
+.access-card h2 { margin-top: 0; }
+.access .notice { margin: 10px 0; }

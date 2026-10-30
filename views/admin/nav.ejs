@@ -2,6 +2,7 @@
   <nav aria-label="后台">
     <a href="<%= base %>/admin"<%= section === 'index' ? ' aria-current=page' : '' %>>概览</a>
     <a href="<%= base %>/admin/shares"<%= section === 'shares' ? ' aria-current=page' : '' %>>分享</a>
+    <a href="<%= base %>/access"<%= section === 'access' ? ' aria-current=page' : '' %>>访问权限</a>
     <a href="<%= base %>/admin/settings"<%= section === 'settings' ? ' aria-current=page' : '' %>>规则与设置</a>
   </nav>
   <form method="post" action="<%= base %>/logout"><input type="hidden" name="_csrf" value="<%= csrf %>"><button class="btn" type="submit">退出登录</button><% if (session.login_via === 'sso') { %> <button class="btn" type="submit" name="platform" value="1">退出平台登录</button><% } %></form>

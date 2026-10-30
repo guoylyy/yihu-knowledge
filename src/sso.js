@@ -21,11 +21,34 @@ export class SsoError extends Error {
   }
 }
 
-// 只认精确匹配。白名单为空时没有任何值能命中，一律拒绝
-export function isAllowed(user, allowed) {
-  return [user?.username, user?.id]
-    .filter((v) => v !== null && v !== undefined && v !== '')
-    .some((v) => allowed.includes(String(v)));
+// 只认精确匹配。白名单为空时没有任何值能命中，一律拒绝。
+// allowedUsers 里可以是用户名或 id（手填时的写法），allowedUserIds 只比 id：用户名恰好是数字的人蹭不进来
+export function isAllowed(user, { allowedUsers, allowedUserIds = [] }) {
+  const id = user?.id === null || user?.id === undefined || user?.id === '' ? null : String(user.id);
+  return [user?.username, id].some((v) => v && allowedUsers.includes(String(v)))
+    || (id !== null && allowedUserIds.some((v) => String(v) === id));
+}
+
+// 把两个列表合成「人」：同一个人的用户名和 id 只算一行。users 是平台名单，没有时靠 allowedProfiles
+export function allowlistMembers({ allowedUsers, allowedUserIds = [], allowedProfiles = {} }, users = []) {
+  const byId = new Map(users.map((u) => [String(u.id), u]));
+  const byName = new Map(users.filter((u) => u.username).map((u) => [u.username, u]));
+  for (const [id, p] of Object.entries(allowedProfiles)) {
+    if (!byId.has(id)) byId.set(id, { id, ...p });
+    if (p.username && !byName.has(p.username)) byName.set(p.username, { id, ...p });
+  }
+  const rows = new Map();
+  const put = (id) => {
+    const p = byId.get(id);
+    rows.set(`id:${id}`, { key: `id:${id}`, id, username: p?.username ?? null, name: p?.name ?? null });
+  };
+  for (const id of allowedUserIds) put(String(id));
+  for (const entry of allowedUsers) {
+    const user = byName.get(entry) ?? byId.get(entry);
+    if (user) put(String(user.id));
+    else rows.set(`name:${entry}`, { key: `name:${entry}`, id: null, username: entry, name: null });
+  }
+  return [...rows.values()];
 }
 
 const sameText = (a, b) => {

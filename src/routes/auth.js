@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { parseCookies, safeNext, SESSION_COOKIE } from '../auth.js';
-import { isAllowed, SsoError, SSO_ERRORS, STATE_COOKIE, STATE_MS } from '../sso.js';
+import { allowlistMembers, isAllowed, SsoError, SSO_ERRORS, STATE_COOKIE, STATE_MS } from '../sso.js';
 
 export function authRoutes({ auth, config, sso }) {
   const r = Router();
@@ -63,15 +63,16 @@ export function authRoutes({ auth, config, sso }) {
       return res.redirect(303, `${req.base}/login?sso_error=${err.code}`);
     }
     const who = { via: 'sso', username: user.username || null, userId: String(user.id) };
-    if (!isAllowed(user, config.allowedUsers)) {
-      auth.recordLogin(req, { ...who, username: who.username ?? user.name ?? null, result: 'denied' });
+    if (!isAllowed(user, config)) {
+      auth.recordLogin(req, { ...who, name: user.name ?? null, result: 'denied' });
+      auth.rememberDenied(res, req, who);
       return res.status(403).render('sso-denied', {
         pageTitle: '没有访问权限', ctx: null, account: user.username || user.name || user.id, userId: user.id,
-        unconfigured: !config.allowedUsers.length, platformLogoutUrl: sso.logoutUrl(req.base),
+        unconfigured: !allowlistMembers(config).length, platformLogoutUrl: sso.logoutUrl(req.base),
       });
     }
     setSession(req, res, auth.createSession(who));
-    auth.recordLogin(req, { ...who, username: who.username ?? user.name ?? null, result: 'ok' });
+    auth.recordLogin(req, { ...who, name: user.name ?? null, result: 'ok' });
     res.redirect(302, req.base + next);
   });
 

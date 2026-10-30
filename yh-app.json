@@ -4,7 +4,7 @@
   "icon": "📚",
   "category": "效率",
   "description": "手机优先的个人知识库：阅读 Markdown 笔记、可控分享与访问审计、双链图谱、AI 总结",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "port": 3030,
   "health": "/health",
   "callback": "/sso/callback",
