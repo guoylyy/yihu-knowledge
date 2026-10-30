@@ -106,10 +106,19 @@ CREATE TABLE IF NOT EXISTS ai_cache (
   answer TEXT NOT NULL,
   ts INTEGER NOT NULL
 );
+CREATE TABLE IF NOT EXISTS audit_log (
+  id INTEGER PRIMARY KEY,
+  ts INTEGER NOT NULL,
+  action TEXT NOT NULL,
+  actor TEXT NOT NULL,
+  ip TEXT,
+  detail TEXT NOT NULL
+);
 `;
 const AI_LOG_ADDED = { mode: 'TEXT', model: 'TEXT', ms: 'INTEGER' };
 const SESSIONS_ADDED = { login_via: "TEXT NOT NULL DEFAULT 'password'", username: 'TEXT', user_id: 'TEXT' };
 const LOGIN_LOG_ADDED = { name: 'TEXT' };
+const SHARES_ADDED = { retired_at: 'INTEGER' };
 
 function addColumns(db, table, added) {
   const columns = db.pragma(`table_info(${table})`).map((c) => c.name);
@@ -118,9 +127,9 @@ function addColumns(db, table, added) {
   }
 }
 
-export function openDb(dataDir) {
+export function openDb(dataDir, file = 'kb.sqlite') {
   fs.mkdirSync(dataDir, { recursive: true, mode: 0o700 });
-  const db = new Database(path.join(dataDir, 'kb.sqlite'));
+  const db = new Database(path.join(dataDir, file));
   db.pragma('journal_mode = WAL');
   db.pragma('synchronous = NORMAL');
   db.pragma('foreign_keys = ON');
@@ -129,6 +138,7 @@ export function openDb(dataDir) {
   addColumns(db, 'ai_log', AI_LOG_ADDED);
   addColumns(db, 'sessions', SESSIONS_ADDED);
   addColumns(db, 'login_log', LOGIN_LOG_ADDED);
+  addColumns(db, 'shares', SHARES_ADDED);
   return db;
 }
 

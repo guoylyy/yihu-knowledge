@@ -54,9 +54,12 @@ export async function inspectLibrary(input, { deny, dataDir }) {
     throw err;
   }
   // 库里的文件都会被索引并可分享，数据目录放在里面的话 config.json 也在其中
-  if (isInside(realRoot, fs.existsSync(dataDir) ? fs.realpathSync(dataDir) : path.resolve(dataDir))) {
+  const realData = fs.existsSync(dataDir) ? fs.realpathSync(dataDir) : path.resolve(dataDir);
+  if (realRoot === realData) return { ok: false, error: '这就是数据目录本身，配置文件和数据库会被当成笔记。换一个目录' };
+  if (isInside(realRoot, realData)) {
     return { ok: false, error: '数据目录在这个目录里面，配置文件和数据库会被当成笔记。换一个目录，或用 KB_DATA_DIR 把数据放到库外面' };
   }
+  if (isInside(realData, realRoot)) return { ok: false, error: '这个目录在数据目录里面，数据目录不能当知识库用。换一个目录' };
 
   const byExt = {};
   const deniedExamples = [];
@@ -103,6 +106,31 @@ export async function inspectLibrary(input, { deny, dataDir }) {
   return truncated ? { ...report, truncated: true } : report;
 }
 
+export function nameProblems({ siteName, ownerName }) {
+  const errors = [];
+  if (siteName.length > MAX_NAME) errors.push(`站点名不能超过 ${MAX_NAME} 个字`);
+  if (ownerName.length > MAX_NAME) errors.push(`主人名不能超过 ${MAX_NAME} 个字`);
+  return errors;
+}
+
+export function passwordProblems(password) {
+  if (password.length < MIN_PASSWORD) return [`口令至少 ${MIN_PASSWORD} 位`];
+  return password.length > MAX_PASSWORD ? [`口令不能超过 ${MAX_PASSWORD} 位`] : [];
+}
+
+export function aiProblems({ aiProvider, aiBaseUrl, aiApiKey, aiModel }, setupEnv) {
+  const errors = [];
+  if (!AI_PROVIDERS.includes(aiProvider)) errors.push('AI 选项不正确');
+  if (aiProvider === 'platform' && setupEnv.platformAiMissing.length) errors.push('未检测到平台应用凭证，不能用平台模型');
+  if (aiProvider === 'claude-cli' && !setupEnv.claudeBin) errors.push('本机没有 claude 命令行');
+  if (aiProvider === 'openai') {
+    if (!/^https?:\/\/[^\s/]+/i.test(aiBaseUrl)) errors.push('OpenAI 兼容接口地址要以 http:// 或 https:// 开头');
+    if (!aiApiKey) errors.push('请填写 API Key');
+    if (!aiModel) errors.push('请填写模型名');
+  }
+  return errors;
+}
+
 // 只校验表单本身；目录由 inspectLibrary 负责，口令 hash 由调用方算
 export function validateForm(form, { setupEnv, keyDraft = '' }) {
   const text = (name) => String(form[name] ?? '').trim();
@@ -117,24 +145,12 @@ export function validateForm(form, { setupEnv, keyDraft = '' }) {
     aiApiKey: typedKey && typedKey !== KEY_MASK ? typedKey : keyDraft,
   };
 
-  if (values.siteName.length > MAX_NAME) errors.push(`站点名不能超过 ${MAX_NAME} 个字`);
-  if (values.ownerName.length > MAX_NAME) errors.push(`主人名不能超过 ${MAX_NAME} 个字`);
+  errors.push(...nameProblems(values));
 
   if (!AUTH_MODES.includes(authMode)) errors.push('请选择谁能进');
   if (authMode !== 'password' && setupEnv.ssoMissing.length) errors.push('未检测到平台应用凭证，不能用平台登录');
-  if (authMode !== 'sso') {
-    if (password.length < MIN_PASSWORD) errors.push(`口令至少 ${MIN_PASSWORD} 位`);
-    if (password.length > MAX_PASSWORD) errors.push(`口令不能超过 ${MAX_PASSWORD} 位`);
-  }
-
-  if (!AI_PROVIDERS.includes(aiProvider)) errors.push('AI 选项不正确');
-  if (aiProvider === 'platform' && setupEnv.platformAiMissing.length) errors.push('未检测到平台应用凭证，不能用平台模型');
-  if (aiProvider === 'claude-cli' && !setupEnv.claudeBin) errors.push('本机没有 claude 命令行');
-  if (aiProvider === 'openai') {
-    if (!/^https?:\/\/[^\s/]+/i.test(values.aiBaseUrl)) errors.push('OpenAI 兼容接口地址要以 http:// 或 https:// 开头');
-    if (!values.aiApiKey) errors.push('请填写 API Key');
-    if (!values.aiModel) errors.push('请填写模型名');
-  }
+  if (authMode !== 'sso') errors.push(...passwordProblems(password));
+  errors.push(...aiProblems(values, setupEnv));
   return { values, password, errors };
 }
 

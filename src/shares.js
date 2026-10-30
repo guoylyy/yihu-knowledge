@@ -29,6 +29,7 @@ export function createShares({ db, catalog, config, deny }) {
                              MAX(CASE WHEN v.kind IN ('view', 'download') THEN v.ts END) AS last_visit
                       FROM shares s LEFT JOIN visits v ON v.share_id = s.id
                       GROUP BY s.id ORDER BY s.created_at DESC`),
+    active: db.prepare('SELECT COUNT(*) FROM shares WHERE retired_at IS NULL AND revoked_at IS NULL AND expires_at > ?').pluck(),
     revoke: db.prepare('UPDATE shares SET revoked_at = ? WHERE id = ? AND revoked_at IS NULL'),
     visit: db.prepare('INSERT INTO visits (share_id, path, ip, ua, referer, kind, ts) VALUES (?, ?, ?, ?, ?, ?, ?)'),
     linkedFrom: db.prepare(`SELECT src.path FROM links l JOIN files src ON src.id = l.src_id
@@ -87,7 +88,7 @@ export function createShares({ db, catalog, config, deny }) {
   function lookup(token) {
     if (!TOKEN_RE.test(token)) return { state: 'invalid' };
     const share = q.byToken.get(token);
-    if (!share) return { state: 'invalid' };
+    if (!share || share.retired_at) return { state: 'invalid' };
     if (share.revoked_at) return { state: 'revoked', share };
     if (share.expires_at <= Date.now()) return { state: 'expired', share };
     return { state: 'ok', share };
@@ -130,6 +131,7 @@ export function createShares({ db, catalog, config, deny }) {
   return {
     create, lookup, allows, inScope, isUnlocked, unlockValue, logVisit, detail, scopeCounts,
     list: () => q.list.all(),
+    activeCount: () => q.active.get(Date.now()),
     revoke: (id) => q.revoke.run(Date.now(), id),
     linkFor: (share) => `${config.baseUrl}/s/${share.token}`,
     filesFor: (share) => (share.kind === 'file' ? [catalog.file(share.path)].filter(Boolean) : catalog.filesUnder(share.path)).filter((f) => inScope(share, f)),

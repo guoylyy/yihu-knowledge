@@ -22,7 +22,7 @@
   <h2>全部分享（<%= shares.length %>）</h2>
   <ul class="list">
     <% for (const s of shares) {
-      const state = s.revoked_at ? '已取消' : s.expires_at <= now ? '已过期' : '有效'; %>
+      const state = s.retired_at ? '换库后失效' : s.revoked_at ? '已取消' : s.expires_at <= now ? '已过期' : '有效'; %>
     <li>
       <a href="<%= base %>/admin/shares/<%= s.id %>"><strong><%= s.path %></strong></a>
       <span class="muted small"><%= state %> · <%= s.kind === 'dir' ? '目录' : '文件' %><%= s.password_hash ? ' · 有密码' : '' %> · 访问 <%= s.visit_count %> 次 · 最近 <%= fmtTime(s.last_visit) %></span>

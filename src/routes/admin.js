@@ -4,12 +4,13 @@ import { configSummary } from '../config.js';
 import { getMeta } from '../db.js';
 import { allowlistMembers } from '../sso.js';
 import { ShareError, EXPIRY_DAYS } from '../shares.js';
+import { settingsRoutes } from './settings.js';
 
-export function adminRoutes({ db, config, auth, shares, indexer, catalog, ai }) {
+export function adminRoutes(deps) {
+  const { db, config, auth, shares, indexer, catalog, ai } = deps;
   const r = Router();
   const counts = db.prepare(`SELECT COUNT(CASE WHEN is_denied = 0 THEN 1 END) AS indexed, COUNT(CASE WHEN is_denied = 1 THEN 1 END) AS denied,
                                     COUNT(CASE WHEN is_sensitive = 1 THEN 1 END) AS sensitive FROM files`);
-  const sensitive = db.prepare('SELECT path, sensitive_kinds FROM files WHERE is_sensitive = 1 ORDER BY path');
   const lastIndex = () => JSON.parse(getMeta(db, 'last_index') ?? 'null');
 
   const renderShares = (res, { status = 200, error = null, path = '' } = {}) => {
@@ -37,13 +38,7 @@ export function adminRoutes({ db, config, auth, shares, indexer, catalog, ai }) 
     res.redirect(303, `${req.base}/admin`);
   });
 
-  r.get('/settings', (req, res) => {
-    res.render('admin/settings', {
-      pageTitle: '设置', section: 'settings', globs: config.denyGlobs, counts: counts.get(), sensitive: sensitive.all(),
-      aiChannel: ai.status().channel, aiLog: ai.recent(), trustProxy: config.trustProxy, baseUrl: config.baseUrl,
-      authMode: config.authMode, allowedCount: allowlistMembers(config).length,
-    });
-  });
+  r.use('/settings', settingsRoutes(deps));
 
   r.get('/paths', (req, res) => {
     const q = String(req.query.q ?? '').toLowerCase();

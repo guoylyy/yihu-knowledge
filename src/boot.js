@@ -15,7 +15,7 @@ export async function boot(env = process.env) {
   async function goLive(config) {
     for (const warning of authWarnings(config)) console.warn(`配置警告: ${warning}`);
     config.setupToken = setupToken;
-    state.kb = await createApp(config);
+    state.kb = await createApp(config, { env });
     state.handler = state.kb.app;
     if (config.sso && !config.sso.problem && !allowlistMembers(config).length) console.log(`白名单为空，打开 /access?token=${setupToken} 添加成员（设置码：${setupToken}）`);
   }

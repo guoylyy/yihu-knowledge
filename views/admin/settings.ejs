@@ -1,7 +1,156 @@
 <%- include('../partials/head') %>
+<%
+  const note = (key) => include('../partials/source-note', { f: fields[key] });
+  const value = (key) => form[key] ?? config[key] ?? '';
+  const errorIn = (name) => (failed.section === name ? failed.error : null);
+  const savedIn = (name) => (saved === name ? '已保存，立即生效。' : null);
+  const ssoOff = env.ssoMissing.length > 0;
+  const platformOff = env.platformAiMissing.length > 0;
+  const hasPassword = Boolean(config.password);
+  const authMode = form.authMode ?? config.authMode;
+  const aiChoice = form.aiProvider ?? config.aiProvider;
+  const authChoices = [
+    ['password', '只用口令', '一个人用，最简单', false],
+    ['sso', '只用平台登录', ssoOff ? '未检测到平台应用凭证' : '平台账号，且在白名单里', ssoOff],
+    ['both', '两者都开', ssoOff ? '未检测到平台应用凭证' : '口令不受白名单限制', ssoOff],
+  ];
+  const aiChoices = [
+    ['platform', '平台模型', platformOff ? '未检测到平台应用凭证' : '将使用平台模型，无需 key', platformOff],
+    ['openai', 'OpenAI 兼容接口', '自己的接口地址和 key', false],
+    ['claude-cli', '本机 Claude 命令行', env.claudeBin ? '已检测到 claude' : '本机没有 claude 命令行', !env.claudeBin],
+    ['off', '关闭', '不调用任何模型', false],
+  ];
+%>
 <div class="page wide">
   <h1 class="page-title">规则与设置</h1>
   <%- include('nav') %>
+
+  <div class="setup settings-forms stack" id="settings-forms" data-csrf="<%= csrf %>">
+    <fieldset class="form-card stack" id="settings-library">
+      <legend>知识库</legend>
+      <% if (errorIn('library')) { %><p class="alert" role="alert"><%= errorIn('library') %></p><% } %>
+      <% if (job.running) { %>
+      <div id="library-progress" class="stack" data-url="<%= base %>/admin/settings/library/progress">
+        <p><strong id="library-phase">正在建立新索引</strong></p>
+        <progress id="library-bar" max="<%= job.total || 1 %>" value="<%= job.done %>"></progress>
+        <p class="muted small" id="library-count" role="status"><%= job.done %> / <%= job.total %></p>
+        <p class="muted small">正在换到 <code><%= job.root %></code>。全站这时读的还是旧库，换好之前不受影响，这个页面可以关掉。</p>
+      </div>
+      <% } else { %>
+      <% if (job.phase === 'done') { %><p class="notice" role="status">已换到 <code><%= job.root %></code>：<%= job.before %> 篇 → <%= job.after %> 篇，<%= job.retired %> 条分享已失效。</p><% } %>
+      <% if (job.phase === 'failed') { %><p class="alert" role="alert"><%= job.error %></p><% } %>
+      <% if (job.phase === 'anomaly') { %><p class="alert" role="alert"><%= job.error %>。没有替换，勾选「确认这就是我要的库」后再提交一次。</p><% } %>
+      <form method="post" action="<%= base %>/admin/settings/library" class="stack" id="library-form" data-check-url="<%= base %>/admin/settings/library/check">
+        <input type="hidden" name="_csrf" value="<%= csrf %>">
+        <div class="setup-inline">
+          <label>目录的绝对路径<input name="root" id="library-root" value="<%= form.root ?? (job.phase === 'anomaly' ? job.root : config.root) %>" autocomplete="off" autocapitalize="off" spellcheck="false"<%= fields.root.locked ? ' disabled' : '' %>></label>
+          <% if (!fields.root.locked) { %><button class="btn" type="button" id="library-check">检测</button><% } %>
+        </div>
+        <%- note('root') %>
+        <% if (env.inDocker) { %><p class="notice">现在运行在容器里，要填<strong>容器内</strong>路径。新目录得先挂载进容器。</p><% } %>
+        <div id="check-result" aria-live="polite"></div>
+        <% if (!fields.root.locked) { %>
+        <button class="btn primary settings-save" type="button" id="library-save">更换目录</button>
+        <dialog id="library-dialog" aria-labelledby="library-dialog-title">
+          <h2 id="library-dialog-title">确认更换知识库目录</h2>
+          <p class="muted small" id="library-target"></p>
+          <ul>
+            <li>索引会重建：当前 <strong id="library-before">0</strong> 篇 → 预计 <strong id="library-after">0</strong> 篇，旧索引会被清空。</li>
+            <li><strong>已有分享链接全部失效</strong>（<span id="library-shares">0</span> 条有效分享），打开就是 404，换回来也不会恢复。记录还留在分享管理里，要发新链接的话先截图记下分给了谁。</li>
+            <li>索引建好之前全站继续读旧库；失败的话什么都不变。</li>
+          </ul>
+          <p class="alert" id="library-anomaly" hidden></p>
+          <label class="check" id="library-accept-row" hidden><input type="checkbox" name="acceptAnomaly" value="1" id="library-accept"> 确认这就是我要的库</label>
+          <div class="inline">
+            <button class="btn" type="button" id="library-cancel">取消</button>
+            <button class="btn danger" type="submit" name="confirm" value="1" id="library-confirm">确认更换</button>
+          </div>
+        </dialog>
+        <% } %>
+      </form>
+      <% } %>
+    </fieldset>
+
+    <fieldset class="form-card stack" id="settings-site">
+      <legend>站点</legend>
+      <% if (savedIn('site')) { %><p class="notice" role="status"><%= savedIn('site') %></p><% } %>
+      <% if (errorIn('site')) { %><p class="alert" role="alert"><%= errorIn('site') %></p><% } %>
+      <form method="post" action="<%= base %>/admin/settings/site" class="stack">
+        <input type="hidden" name="_csrf" value="<%= csrf %>">
+        <label>站点名<input name="siteName" value="<%= value('siteName') %>" maxlength="40"><%- note('siteName') %></label>
+        <label>主人名<input name="ownerName" value="<%= value('ownerName') %>" maxlength="40"<%= fields.ownerName.locked ? ' disabled' : '' %>><%- note('ownerName') %><small class="muted">分享页显示「来自 <%= config.ownerName %> 的分享」。</small></label>
+        <label>对外地址<input name="baseUrl" value="<%= value('baseUrl') %>" autocomplete="off" autocapitalize="off" spellcheck="false"<%= fields.baseUrl.locked ? ' disabled' : '' %>><%- note('baseUrl') %><small class="muted">分享链接用这个地址生成，必须以 http:// 或 https:// 开头。填 https 后，登录 cookie 只走 https。</small></label>
+        <button class="btn primary settings-save" type="submit">保存站点信息</button>
+      </form>
+    </fieldset>
+
+    <fieldset class="form-card stack" id="settings-auth">
+      <legend>访问</legend>
+      <% if (savedIn('auth') || savedIn('password')) { %><p class="notice" role="status"><%= saved === 'password' ? '口令已修改，其它口令登录的会话已全部退出。' : savedIn('auth') %></p><% } %>
+      <% if (errorIn('auth')) { %><p class="alert" role="alert"><%= errorIn('auth') %></p><% } %>
+      <form method="post" action="<%= base %>/admin/settings/auth" class="stack" id="auth-form">
+        <input type="hidden" name="_csrf" value="<%= csrf %>">
+        <% for (const [mode, title, hint, off] of authChoices) { const disabled = off || fields.authMode.locked; %>
+        <label class="choice"><input type="radio" name="authMode" value="<%= mode %>"<%= authMode === mode ? ' checked' : '' %><%= disabled ? ' disabled' : '' %>><span><strong><%= title %></strong><small class="muted"><%= hint %></small></span></label>
+        <% } %>
+        <%- note('authMode') %>
+        <% if (!fields.authMode.locked) { %>
+        <% if (!hasPassword) { %>
+        <label data-show-auth="password both">新口令（至少 <%= minPassword %> 位）<input type="password" name="newPassword" autocomplete="new-password"></label>
+        <% } %>
+        <p class="muted small">切换后，不再被允许的登录方式对应的会话立即退出。当前会话用的方式被关掉的话，要重新登录。</p>
+        <button class="btn primary settings-save" type="submit">保存登录方式</button>
+        <% } %>
+      </form>
+      <% if (config.authMode !== 'sso') { %>
+      <h3>登录口令</h3>
+      <% if (errorIn('password')) { %><p class="alert" role="alert"><%= errorIn('password') %></p><% } %>
+      <% if (fields.password.locked) { %>
+      <%- note('password') %>
+      <% } else { %>
+      <form method="post" action="<%= base %>/admin/settings/password" class="stack">
+        <input type="hidden" name="_csrf" value="<%= csrf %>">
+        <label>当前口令<input type="password" name="currentPassword" autocomplete="current-password" required></label>
+        <label>新口令（至少 <%= minPassword %> 位）<input type="password" name="newPassword" autocomplete="new-password" minlength="<%= minPassword %>" required></label>
+        <label>再输一次新口令<input type="password" name="confirmPassword" autocomplete="new-password" required></label>
+        <%- note('password') %>
+        <p class="muted small">改完后，其它设备上用口令登录的会话全部退出，当前这个保留。</p>
+        <button class="btn primary settings-save" type="submit">修改口令</button>
+      </form>
+      <% } %>
+      <% } %>
+    </fieldset>
+
+    <fieldset class="form-card stack" id="settings-ai">
+      <legend>AI</legend>
+      <% if (savedIn('ai')) { %><p class="notice" role="status"><%= savedIn('ai') %></p><% } %>
+      <% if (errorIn('ai')) { %><p class="alert" role="alert"><%= errorIn('ai') %></p><% } %>
+      <form method="post" action="<%= base %>/admin/settings/ai" class="stack" id="ai-form">
+        <input type="hidden" name="_csrf" value="<%= csrf %>">
+        <% for (const [name, title, hint, off] of aiChoices) { const disabled = off || fields.aiProvider.locked; %>
+        <label class="choice"><input type="radio" name="aiProvider" value="<%= name %>"<%= aiChoice === name ? ' checked' : '' %><%= disabled ? ' disabled' : '' %>><span><strong><%= title %></strong><small class="muted"><%= hint %></small></span></label>
+        <% } %>
+        <%- note('aiProvider') %>
+        <fieldset class="settings-group" id="ai-openai"<%= aiChoice === 'openai' ? '' : ' disabled' %>>
+          <div class="stack">
+            <label>接口地址<input name="aiBaseUrl" value="<%= value('aiBaseUrl') %>" placeholder="https://api.example.com/v1" autocomplete="off" autocapitalize="off" spellcheck="false"<%= fields.aiBaseUrl.locked ? ' disabled' : '' %>><%- note('aiBaseUrl') %></label>
+            <label>API Key<input type="password" name="aiApiKey" placeholder="<%= config.aiApiKey ? keyMask : '' %>" autocomplete="off"<%= fields.aiApiKey.locked ? ' disabled' : '' %>><%- note('aiApiKey') %><% if (config.aiApiKey && !fields.aiApiKey.locked) { %><small class="muted">已设置，留空表示不修改。</small><% } %></label>
+            <label>模型名<input name="aiModel" value="<%= value('aiModel') %>" autocomplete="off" autocapitalize="off" spellcheck="false"<%= fields.aiModel.locked ? ' disabled' : '' %>><%- note('aiModel') %></label>
+          </div>
+        </fieldset>
+        <button class="btn primary settings-save" type="submit">保存 AI 设置</button>
+      </form>
+    </fieldset>
+  </div>
+
+  <h2>设置改动记录</h2>
+  <% if (changes.length) { %>
+  <div class="table-wrap"><table class="grid">
+    <thead><tr><th>时间</th><th>操作人</th><th>字段</th><th>改动</th></tr></thead>
+    <tbody><% for (const row of changes) { for (const c of row.changes) { %><tr><td class="nowrap"><%= fmtTime(row.ts) %></td><td><%= row.actor %></td><td><%= fields[c.field]?.label ?? c.field %></td><td><%= c.note ?? `${c.from || '（空）'} → ${c.to || '（空）'}` %></td></tr><% } } %></tbody>
+  </table></div>
+  <% } else { %><p class="muted">还没有改动记录。</p><% } %>
+
   <h2>当前生效的 deny 规则（<%= globs.length %>）</h2>
   <p class="muted small">通过 KB_DENY_GLOBS 追加；写 <code>!规则</code> 可移除一条默认规则。规则作用于路径的每一段，不区分大小写。当前排除文件 <%= counts.denied %> 个。</p>
   <ul class="chips"><% for (const g of globs) { %><li><code><%= g %></code></li><% } %></ul>
@@ -13,9 +162,8 @@
   </table></div>
   <h2>运行配置</h2>
   <table class="kv">
-    <tr><th scope="row">对外地址</th><td><%= baseUrl %></td></tr>
     <tr><th scope="row">信任代理层数</th><td><%= trustProxy %></td></tr>
-    <tr><th scope="row">登录方式</th><td><%= authMode %><% if (authMode !== 'password') { %>（白名单 <%= allowedCount %> 人）<% } %></td></tr>
+    <tr><th scope="row">登录方式</th><td><%= config.authMode %><% if (config.authMode !== 'password') { %>（白名单 <%= allowedCount %> 人）<% } %></td></tr>
     <tr><th scope="row">AI 通道</th><td><%= aiChannel %></td></tr>
   </table>
   <h2>AI 调用日志</h2>
@@ -26,4 +174,6 @@
   </table></div>
   <% } else { %><p class="muted">还没有调用记录。</p><% } %>
 </div>
+<script src="<%= base %>/assets/library-report.js" defer></script>
+<script src="<%= base %>/assets/settings.js" defer></script>
 <%- include('../partials/foot') %>

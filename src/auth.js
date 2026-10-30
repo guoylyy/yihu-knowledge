@@ -113,7 +113,8 @@ export function createAuth({ db, config }) {
   const recentDenied = db.prepare("SELECT * FROM login_log WHERE via = 'sso' AND result = 'denied' ORDER BY id DESC LIMIT ?");
   const deniedEntry = db.prepare("SELECT * FROM login_log WHERE id = ? AND via = 'sso' AND result = 'denied'");
 
-  async function login(password, ip) {
+  // 改口令时核对当前口令也走这里：和登录共用一份次数上限，偷到的会话不能拿来撞口令
+  async function checkPassword(password, ip) {
     const key = `login:${ip}`;
     const retryAfter = throttle.retryAfter(key);
     if (retryAfter) return { ok: false, retryAfter };
@@ -121,7 +122,12 @@ export function createAuth({ db, config }) {
     const ok = await argon2.verify(passwordHash, String(password ?? '').slice(0, 1024));
     if (!ok) return { ok: false, retryAfter: throttle.retryAfter(key) };
     throttle.clear(key);
-    return { ok: true, ...createSession({ via: 'password' }) };
+    return { ok: true };
+  }
+
+  async function login(password, ip) {
+    const result = await checkPassword(password, ip);
+    return result.ok ? { ...result, ...createSession({ via: 'password' }) } : result;
   }
 
   const findSession = db.prepare('SELECT * FROM sessions WHERE id_hash = ? AND expires_at > ?');
@@ -186,10 +192,11 @@ export function createAuth({ db, config }) {
   }
 
   return {
-    init, login, createSession, recordLogin, recentLogins: (limit = 20) => recent.all(limit),
+    init, login, checkPassword, createSession, recordLogin, recentLogins: (limit = 20) => recent.all(limit),
     recentDenied: (limit = 20) => recentDenied.all(limit), deniedEntry: (id) => deniedEntry.get(id) ?? null,
     session, requireAuth, requireCsrf, logout, cookieOptions, throttle, canBootstrap, rememberDenied, deniedIdentity,
     dropSession: (row) => dropSession.run(row.id_hash),
+    dropOtherPasswordSessions: (keep) => db.prepare("DELETE FROM sessions WHERE login_via = 'password' AND id_hash != ?").run(keep?.id_hash ?? ''),
   };
 }
 

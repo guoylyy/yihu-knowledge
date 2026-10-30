@@ -305,6 +305,20 @@ input:not([type="checkbox"]), select { min-height: 42px; padding: 0 10px; border
 .setup .choice span { display: flex; flex-direction: column; min-width: 0; }
 .setup .choice small { font-size: .8rem; }
 .setup progress { display: block; width: 100%; height: 10px; accent-color: var(--accent); }
+.settings-forms { margin-bottom: 8px; }
+.settings-forms h3 { margin: 8px 0 0; font-size: 1rem; }
+.settings-forms input:disabled { opacity: .6; cursor: not-allowed; background: var(--surface-2); }
+.settings-forms .source-note { font-size: .78rem; color: var(--muted); overflow-wrap: anywhere; }
+.settings-forms .settings-save { align-self: flex-start; }
+.settings-group { padding: 0; border: 0; }
+.settings-group:disabled { opacity: .5; }
+.settings-forms dialog { width: min(32rem, calc(100vw - 32px)); padding: 16px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); color: var(--text); }
+.settings-forms dialog::backdrop { background: rgb(0 0 0 / .45); }
+.settings-forms dialog h2 { margin: 0 0 6px; font-size: 1.1rem; }
+.settings-forms dialog ul { margin: 10px 0; padding-left: 20px; }
+.settings-forms dialog li + li { margin-top: 6px; }
+.settings-forms dialog p { overflow-wrap: anywhere; }
+.settings-forms dialog .inline { justify-content: flex-end; margin-top: 12px; }
 
 /* 平台用户勾选列表与访问权限页 */
 .picker { display: flex; flex-direction: column; gap: 8px; min-width: 0; }

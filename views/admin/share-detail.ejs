@@ -1,6 +1,6 @@
 <%- include('../partials/head') %>
 <%
-  const state = share.revoked_at ? '已取消' : share.expires_at <= now ? '已过期' : '有效';
+  const state = share.retired_at ? '换库后失效' : share.revoked_at ? '已取消' : share.expires_at <= now ? '已过期' : '有效';
   const W = 600, H = 120, BAR = 18, GAP = 2;
   const totals = days.map((d) => d.views + d.downloads);
   const peak = Math.max(1, ...totals);

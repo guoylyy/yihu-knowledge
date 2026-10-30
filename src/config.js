@@ -150,7 +150,7 @@ export function loadConfig(env = process.env) {
   };
 }
 
-const SOURCE_LABELS = { env: '环境变量', file: '配置文件', default: '默认值' };
+export const SOURCE_LABELS = { env: '环境变量', file: '配置文件', default: '默认值' };
 
 // /admin 用来排查「这一项到底是谁定的」；口令和 key 只说有没有，不给值
 export function configSummary(config) {

@@ -188,6 +188,7 @@ export function runIndex({ db, root, deny, full = false, onProgress }) {
   const seconds = (performance.now() - started) / 1000;
   const result = {
     total: found.length - denied,
+    md: found.filter((e) => !e.denied && e.ext === 'md').length,
     denied,
     deniedDirs,
     processed: changed.length,
@@ -198,4 +199,38 @@ export function runIndex({ db, root, deny, full = false, onProgress }) {
   };
   setMeta(db, 'last_index', JSON.stringify(result));
   return result;
+}
+
+// 把临时库的索引搬进正式库。kb.sqlite 里还有会话、分享和审计，不能整个文件替换；放在一个事务里，WAL 下读者提交前看到的一直是旧库。
+// fts 是 contentless 表读不出原文，影子表又写不了，只能按 file_text 重新灌。
+// 旧分享在同一事务里失效：路径相同的文件在新库里是另一份内容，不能让旧链接继续打开
+export function adoptIndex({ db, file, now = Date.now() }) {
+  db.prepare('ATTACH DATABASE ? AS incoming').run(file);
+  try {
+    const page = db.prepare(`SELECT f.id, f.title, f.path, t.body FROM incoming.files f
+                             LEFT JOIN incoming.file_text t ON t.file_id = f.id
+                             WHERE f.is_denied = 0 AND f.id > ? ORDER BY f.id LIMIT ?`);
+    const insertFts = db.prepare('INSERT INTO main.fts (rowid, title, path, body) VALUES (?, ?, ?, ?)');
+    const retire = db.prepare('UPDATE main.shares SET retired_at = ? WHERE retired_at IS NULL AND revoked_at IS NULL AND expires_at > ?');
+    const adopt = db.transaction(() => {
+      db.exec(`INSERT INTO main.fts (fts) VALUES ('delete-all');
+               DELETE FROM main.links; DELETE FROM main.tags; DELETE FROM main.file_text; DELETE FROM main.files;
+               INSERT INTO main.files SELECT * FROM incoming.files;
+               INSERT INTO main.links SELECT * FROM incoming.links;
+               INSERT INTO main.tags SELECT * FROM incoming.tags;
+               INSERT INTO main.file_text SELECT * FROM incoming.file_text;`);
+      for (let rows = page.all(0, BATCH); rows.length; rows = page.all(rows.at(-1).id, BATCH)) {
+        for (const r of rows) insertFts.run(r.id, tokenizeForFts(r.title ?? ''), tokenizeForFts(r.path), tokenizeForFts(r.body ?? ''));
+      }
+      db.exec("INSERT OR REPLACE INTO main.meta SELECT key, value FROM incoming.meta WHERE key IN ('index_fingerprint', 'last_index')");
+      // 代数只能往上加：临时库从 1 数起，照抄过来可能和进程里缓存的快照撞号
+      setMeta(db, 'index_generation', Number(getMeta(db, 'index_generation') ?? 0) + 1);
+      return retire.run(now, now).changes;
+    });
+    const retiredShares = adopt.immediate();
+    db.pragma('wal_checkpoint(TRUNCATE)'); // 整库搬一次 WAL 会涨到索引那么大，不收回就一直占着盘
+    return { retiredShares };
+  } finally {
+    db.exec('DETACH DATABASE incoming');
+  }
 }

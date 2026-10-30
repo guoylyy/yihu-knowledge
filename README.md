@@ -47,7 +47,18 @@ npm start                         # 打开 http://localhost:3030
 
 ### 重新配置
 
-删除 `data/config.json`（Docker 下是 `/data/config.json`）并重启，下次访问回到向导。配置完成后 `/setup` 一律 404。换口令后，旧口令登录的会话全部失效。
+日常修改不用重新配置：`/admin/settings` 可以改知识库目录、站点名、主人名、对外地址、登录方式、口令和 AI 通道，每个分区单独保存，保存后立即生效，不用重启。每项标着来源，来自环境变量的项是只读的，因为环境变量优先，界面改了也不生效。
+
+**更换知识库目录**是破坏性操作：
+
+1. 检查新目录：存在、可读、非空，且不能和数据目录互相包含。
+2. 弹窗确认后果：索引重建（当前 N 篇 → 预计 M 篇），**已有分享链接全部失效**。新库没有 Markdown，或文件数比旧库少 90% 以上时，还要额外勾选确认。
+3. 把新目录索引到临时库 `reindex.tmp.sqlite`，这期间全站继续读旧库，设置页显示进度。
+4. 成功后在一个事务里把索引搬进正式库，再写 `config.json`；任何一步失败，旧配置和旧索引都保持不变。
+
+会话、分享记录和日志和索引放在同一个 `kb.sqlite` 里，换库时都保留。分享记录标记为「换库后失效」，打开链接是 404；即使新库里有同路径的文件也一样，避免旧链接打开另一份内容，换回原目录也不会恢复。改动记录写在 `audit_log` 表（`settings_change`），设置页可以看到，口令和 key 只记「已修改」。
+
+要从头配置：删除 `data/config.json`（Docker 下是 `/data/config.json`）并重启，下次访问回到向导。配置完成后 `/setup` 一律 404。换口令后，旧口令登录的会话全部失效。
 
 ### 上线到公网
 
@@ -160,14 +171,14 @@ SSO 登录走平台的 OAuth2 授权码流程：`/sso/login` 跳平台授权页�
   3. 发送前复查：AI 调用前按标记和当前正文再扫一遍，命中就不发，索引落后于文件时也拦得住。
 - **AI 只发当前一篇**：总结和追问都只带这一篇（或选中的片段），内嵌图片会被剥掉。相同内容命中本地缓存，不重复发送。模型回答按不可信内容渲染，不开 HTML 和图片。`claude-cli` 通道以 `--safe-mode --tools ""` 运行，模型没有任何工具，子进程也拿不到 `KB_*`、`AI_*`、`YH_*` 环境变量。
 - **`KB_TRUST_PROXY` 要等于实际代理层数**：设大了，客户端能伪造 IP 绕过登录锁定；设小了，所有人共用一个 IP，一次爆破会把主人也锁在外面。
-- **`data/` 等同于笔记本身**：里面有全文索引和 `config.json`，备份和迁移时按敏感数据对待。库目录不能包含数据目录，否则配置文件会被当成笔记索引，向导会拒绝。
+- **`data/` 等同于笔记本身**：里面有全文索引和 `config.json`，备份和迁移时按敏感数据对待。库目录和数据目录不能互相包含，否则配置文件会被当成笔记索引，向导和设置页都会拒绝。
 - **未配置的实例不要长期暴露**：向导期间任何人都能打开 `/setup`，但提交、目录检测和平台用户列表要么来自本机，要么带启动日志里的设置码。配置完成后这组接口整体消失。
 
 ## 已知限制
 
 - Office 文件只有文本预览，不保留版式；老格式 `.doc` / `.ppt` 不支持预览。
 - 进来的人都能打开 `/access` 改白名单，没有单独的管理员角色。
-- 向导只运行一次。改单项配置用环境变量，或编辑 `config.json` 后重启。
+- 向导只运行一次。之后改配置用 `/admin/settings`；deny 规则仍然只能用 `KB_DENY_GLOBS`，改完要重启。
 - 没有多租户：一个实例一个库，进来的人权限完全相同。
 - 只读：应用不修改笔记，编辑仍在你自己的工具里做。
 
@@ -202,7 +213,7 @@ npm run screenshots:setup  # 配置向导截图，顺带在真浏览器里走一
 
 A self-hosted, mobile-first reader for a folder of Markdown notes: Obsidian-style wiki links, a link graph, controlled sharing with access logs, and per-note AI summaries.
 
-- **Standalone**: run `npm start` or the Docker image and open `/setup`. A four-step wizard writes `data/config.json` (mode 600) and runs the first index. Inside Docker, enter the container path (`/library`); unless you are on the server itself, the wizard asks for the setup code printed in the startup log. Delete `config.json` and restart to reconfigure. Environment variables override `config.json`, and `docker compose` deployments that set `KB_ROOT` skip the wizard.
+- **Standalone**: run `npm start` or the Docker image and open `/setup`. A four-step wizard writes `data/config.json` (mode 600) and runs the first index. Inside Docker, enter the container path (`/library`); unless you are on the server itself, the wizard asks for the setup code printed in the startup log. Afterwards, `/admin/settings` edits the library path, site info, sign-in mode, password and AI channel without a restart; changing the library builds a temporary index first, keeps serving the old one until the swap, and invalidates existing share links. Delete `config.json` and restart to reconfigure from scratch. Environment variables override `config.json`, and `docker compose` deployments that set `KB_ROOT` skip the wizard.
 - **On Yihu One**: `AUTH_MODE=sso`. Platform login plus an explicit allowlist, picked from the platform's user list at `/access` and effective immediately. An empty list denies everyone; the setup code in the startup log opens `/access?token=<code>` to add the first member. `KB_ALLOWED_USERS` (usernames or user ids) is for automated deployments: when set it overrides the UI, which turns read-only. `AUTH_MODE=both` enables both entry points.
 - **AI**: uses the platform model when `YH_CLIENT_ID` and `YH_CLIENT_SECRET` are set, otherwise any OpenAI-compatible API, the local `claude` CLI, or off. `AI_PROVIDER` overrides the choice. Only the current note is sent, and notes that look like they contain secrets are never sent.
 - **Limits**: single library per instance, no per-user permissions, the allowlist is edited by hand, Office files get text-only previews.
