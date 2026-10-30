@@ -1,4 +1,6 @@
 // PDF 阅读器。只渲染视口内的页和前后各一页，其余是按比例占位的空 div，几百页的文件也只有几张 canvas
+import { ZOOM_MAX, ZOOM_MIN, ZOOM_STEP, createGestures, doubleTapTarget, isZoomed, pinchZoom, previewOffset, renderScale, snapZoom, wheelFactor } from './pdf-zoom.mjs';
+
 const root = document.getElementById('pdfv');
 const $ = (s) => root.querySelector(s);
 const scroller = $('.pdfv-scroll');
@@ -10,13 +12,10 @@ const input = $('.pdfv-input');
 const TOUCH = navigator.maxTouchPoints > 0;
 const MAX_PIXELS = TOUCH ? 8e6 : 16e6; // iOS 单张 canvas 超过约 16MP 直接画白，几张加起来也有内存上限
 const CHUNK = 256 * 1024;
-const ZOOM_STEP = 1.25;
-const ZOOM_MIN = 0.5;
-const ZOOM_MAX = 4;
 const KEEP = 2; // 超出视口这么多页就回收 canvas
 const PROBE = 5; // 提前量取真实尺寸，占位在看到之前就是对的
-const SWIPE_MIN = 50;
-const SWIPE_MS = 800;
+const SETTLE_MS = 150; // 缩放停下这么久才重绘，连续捏合或滚轮时只动 transform
+const ZOOM_KEYS = { '=': 'zoom-in', '+': 'zoom-in', '-': 'zoom-out', 0: 'reset' };
 
 let doc = null;
 let pages = [];
@@ -30,6 +29,10 @@ let probing = false;
 let frame = 0;
 let renderTimer = 0;
 let hashTimer = 0;
+let preview = null; // 捏合或 Ctrl+滚轮进行中的预览，松手才改真实布局
+let previewFrame = 0;
+let settleAt = 0;
+let wheelTimer = 0;
 
 function say(text) {
   message.textContent = text;
@@ -47,13 +50,15 @@ function fallback() {
 }
 
 const padding = () => parseFloat(getComputedStyle(holder).paddingLeft) * 2;
+const fitWidth = (p) => (scroller.clientWidth - padding()) / p.width;
 
 function scaleOf(p) {
-  const pad = padding();
-  const width = scroller.clientWidth - pad;
-  if (mode === 'page') return Math.min(width / p.width, (scroller.clientHeight - pad) / p.height);
-  return (width / p.width) * zoom;
+  if (mode === 'page') return Math.min(fitWidth(p), (scroller.clientHeight - padding()) / p.height);
+  return fitWidth(p) * zoom;
 }
+
+// 适应页面下的字比适应宽度小，要从当前显示大小接着放大才不会突然跳一下
+const shownZoom = (p) => scaleOf(p) / fitWidth(p);
 
 function place(p) {
   const scale = scaleOf(p);
@@ -102,10 +107,7 @@ function release(p) {
   if (p.page && !p.task) p.page.cleanup();
 }
 
-const targetScale = (p) => {
-  const scale = scaleOf(p) * Math.min(window.devicePixelRatio || 1, 3);
-  return Math.min(scale, Math.sqrt(MAX_PIXELS / (p.width * p.height)));
-};
+const targetScale = (p) => renderScale(scaleOf(p), window.devicePixelRatio, p.width, p.height, MAX_PIXELS);
 const stale = (p) => Math.abs(p.drawn - targetScale(p)) > 0.01;
 
 // 真实尺寸只有在取到这一页时才知道。上方的页变高会把正在读的内容顶走，所以同步补偿滚动位置
@@ -161,7 +163,13 @@ async function render(p) {
 }
 
 async function drain() {
-  if (rendering) return;
+  if (rendering || preview) return;
+  const wait = settleAt - performance.now();
+  if (wait > 0) {
+    clearTimeout(renderTimer);
+    renderTimer = setTimeout(drain, wait);
+    return;
+  }
   const next = wanted.find((n) => stale(pages[n - 1]));
   if (!next) return;
   rendering = pages[next - 1];
@@ -177,7 +185,7 @@ async function drain() {
 
 function update() {
   frame = 0;
-  if (!pages.length) return;
+  if (!pages.length || preview) return; // 预览时滚动位置归零了，不能拿来算页码和回收
   const top = scroller.scrollTop;
   const height = scroller.clientHeight;
   const first = pageAt(top);
@@ -198,31 +206,114 @@ function schedule() {
   frame ||= requestAnimationFrame(update);
 }
 
+// 重绘期间旧 canvas 留着被拉伸，不闪白；等手势停下再画，cancel 掉的是按旧比例在画的那张
+function settle() {
+  settleAt = performance.now() + SETTLE_MS;
+  rendering?.task?.cancel();
+  schedule();
+}
+
 function relayout() {
-  if (!pages.length) return;
+  if (!pages.length || preview) return;
   const anchor = pages[current - 1].el;
   const within = (scroller.scrollTop - anchor.offsetTop) / (anchor.offsetHeight || 1);
   pages.forEach(place);
   scroller.scrollTop = anchor.offsetTop + within * anchor.offsetHeight;
   if (pinned) pinned.top = scroller.scrollTop;
-  rendering?.task?.cancel();
-  scroller.classList.toggle('pdfv-wide', scroller.scrollWidth > scroller.clientWidth + 1);
-  schedule();
+  settle();
+}
+
+function syncBar() {
+  const custom = mode === 'custom';
+  scroller.classList.toggle('pdfv-zoomed', custom);
+  $('[data-act="zoom-out"]').disabled = !custom;
+  $('[data-act="zoom-in"]').disabled = zoom >= ZOOM_MAX;
+  const fit = $('[data-act="fit"]');
+  fit.textContent = custom ? '复位' : mode === 'width' ? '适宽' : '适页';
+  fit.setAttribute('aria-label', custom ? '复位到适宽' : '切换适应方式');
+}
+
+// 手指下的内容用「第几页的哪个比例」记，不用滚动坐标：页间距和内边距不随缩放变，坐标换算会越翻越偏
+function anchorAt(x, y) {
+  const p = pages[pageAt(scroller.scrollTop + y) - 1];
+  const fx = (scroller.scrollLeft + x - p.el.offsetLeft) / p.el.offsetWidth;
+  const fy = (scroller.scrollTop + y - p.el.offsetTop) / p.el.offsetHeight;
+  return { p, x, y, fx, fy };
+}
+
+function applyZoom(next, { p, x, y, fx, fy }) {
+  // 适页下两指只是碰了一下，别把模式换掉
+  if (mode !== 'page' || Math.abs(next / shownZoom(p) - 1) > 0.02) {
+    zoom = snapZoom(next);
+    mode = zoom === ZOOM_MIN ? 'width' : 'custom';
+    pages.forEach(place);
+  }
+  syncBar();
+  scroller.scrollLeft = p.el.offsetLeft + fx * p.el.offsetWidth - x;
+  scroller.scrollTop = p.el.offsetTop + fy * p.el.offsetHeight - y;
+  settle();
 }
 
 function setZoom(next) {
-  // 适应页面下的字比适应宽度小，从当前显示大小接着放大才不会突然跳一下
-  const from = mode === 'page' ? scaleOf(pages[current - 1]) / ((scroller.clientWidth - padding()) / pages[current - 1].width) : zoom;
-  zoom = Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, next(from)));
-  mode = 'custom';
-  $('[data-act="fit"]').textContent = '适宽';
-  relayout();
+  const anchor = anchorAt(scroller.clientWidth / 2, pinned ? 0 : scroller.clientHeight / 2);
+  applyZoom(next(shownZoom(anchor.p)), anchor);
+  if (pinned) pinned.top = scroller.scrollTop;
+}
+
+const viewPoint = (clientX, clientY) => {
+  const box = scroller.getBoundingClientRect();
+  return { x: clientX - box.left, y: clientY - box.top, box };
+};
+
+function toggleZoomAt(clientX, clientY) {
+  const { x, y } = viewPoint(clientX, clientY);
+  applyZoom(doubleTapTarget(zoom), anchorAt(x, y));
+}
+
+function paintPreview() {
+  previewFrame = 0;
+  if (!preview) return;
+  const { k, left, top } = previewOffset(preview);
+  holder.style.transform = `translate(${-left}px, ${-top}px) scale(${k})`;
+}
+
+function beginPreview(clientX, clientY) {
+  if (preview) endPreview();
+  const { x, y, box } = viewPoint(clientX, clientY);
+  const anchor = anchorAt(x, y);
+  const start = shownZoom(anchor.p);
+  preview = {
+    anchor, box, start, zoom: start, x, y,
+    originX: scroller.scrollLeft + x, originY: scroller.scrollTop + y,
+    viewWidth: scroller.clientWidth, viewHeight: scroller.clientHeight,
+    contentWidth: holder.offsetWidth, contentHeight: holder.offsetHeight,
+  };
+  // overflow:hidden 掐断正在进行的原生滚动。滚动归零后整段位移都在 transform 里，缩小时滚动范围变小也不会被浏览器夹回去
+  scroller.classList.add('pdfv-pinching');
+  scroller.scrollLeft = 0;
+  scroller.scrollTop = 0;
+  paintPreview();
+}
+
+function movePreview(scale, clientX, clientY) {
+  Object.assign(preview, { zoom: pinchZoom(preview.start, scale), x: clientX - preview.box.left, y: clientY - preview.box.top });
+  previewFrame ||= requestAnimationFrame(paintPreview);
+}
+
+function endPreview() {
+  if (!preview) return;
+  const { anchor, zoom: next, x, y } = preview;
+  clearTimeout(wheelTimer);
+  preview = null;
+  holder.style.transform = '';
+  scroller.classList.remove('pdfv-pinching');
+  applyZoom(next, { ...anchor, x, y });
 }
 
 function toggleFit() {
   mode = mode === 'width' ? 'page' : 'width';
-  zoom = 1;
-  $('[data-act="fit"]').textContent = mode === 'width' ? '适宽' : '适页';
+  zoom = ZOOM_MIN;
+  syncBar();
   relayout();
 }
 
@@ -231,7 +322,8 @@ const ACTIONS = {
   next: () => go(current + 1),
   'zoom-in': () => setZoom((z) => z * ZOOM_STEP),
   'zoom-out': () => setZoom((z) => z / ZOOM_STEP),
-  fit: toggleFit,
+  reset: () => setZoom(() => ZOOM_MIN),
+  fit: () => (mode === 'custom' ? ACTIONS.reset() : toggleFit()),
 };
 
 function bindControls() {
@@ -249,8 +341,12 @@ function bindControls() {
   scroller.addEventListener('scroll', schedule, { passive: true });
   new ResizeObserver(relayout).observe(scroller);
   document.addEventListener('keydown', (e) => {
-    if (e.target.closest?.('input, textarea, select') || e.metaKey || e.ctrlKey || e.altKey) return;
-    if (e.key === 'ArrowLeft') go(current - 1);
+    if (e.target.closest?.('input, textarea, select') || e.altKey) return;
+    if (e.metaKey || e.ctrlKey) {
+      if (!ZOOM_KEYS[e.key]) return;
+      e.preventDefault();
+      ACTIONS[ZOOM_KEYS[e.key]]();
+    } else if (e.key === 'ArrowLeft') go(current - 1);
     else if (e.key === 'ArrowRight') go(current + 1);
   });
   window.addEventListener('hashchange', () => {
@@ -258,21 +354,44 @@ function bindControls() {
     if (n) go(n);
   });
 
-  // 左右滑动翻页。放大后横向要留给平移，两指是缩放，这两种情况都不算翻页
-  let touch = null;
-  scroller.addEventListener('touchstart', (e) => {
-    const t = e.touches[0];
-    touch = e.touches.length === 1 ? { x: t.clientX, y: t.clientY, at: e.timeStamp } : null;
-  }, { passive: true });
+  bindGestures();
+}
+
+// 放大后的平移就是 scroller 的原生滚动（两轴都走它，自带惯性和边界），手势只负责捏合、双击和未放大时的翻页
+function bindGestures() {
+  const gestures = createGestures({
+    zoomed: () => isZoomed(zoom) || (window.visualViewport?.scale ?? 1) > 1.05,
+    onPinchStart: beginPreview,
+    onPinchMove: movePreview,
+    onPinchEnd: endPreview,
+    onSwipe: (step) => go(current + step),
+    onDoubleTap: toggleZoomAt,
+  });
+  const points = (list) => Array.from(list, (t) => ({ id: t.identifier, x: t.clientX, y: t.clientY }));
+  let touchedAt = -Infinity;
+  scroller.addEventListener('touchstart', (e) => gestures.down(points(e.touches), e.timeStamp), { passive: true });
+  scroller.addEventListener('touchmove', (e) => {
+    if (gestures.move(points(e.touches)) && e.cancelable) e.preventDefault();
+  }, { passive: false });
   scroller.addEventListener('touchend', (e) => {
-    const start = touch;
-    touch = null;
-    if (!start || scroller.classList.contains('pdfv-wide') || (window.visualViewport?.scale ?? 1) > 1.05) return;
-    const t = e.changedTouches[0];
-    const dx = t.clientX - start.x;
-    const dy = t.clientY - start.y;
-    if (Math.abs(dx) >= SWIPE_MIN && Math.abs(dx) > Math.abs(dy) * 1.5 && e.timeStamp - start.at < SWIPE_MS) go(current + (dx < 0 ? 1 : -1));
-  }, { passive: true });
+    touchedAt = e.timeStamp;
+    if (gestures.up(points(e.touches), points(e.changedTouches)[0], e.timeStamp) && e.cancelable) e.preventDefault();
+  }, { passive: false });
+  scroller.addEventListener('touchcancel', (e) => gestures.cancel(points(e.touches)));
+  // iOS Safari 的页面级捏合不完全听 touch-action；桌面 Safari 的触控板捏合不走这里，留给浏览器
+  if (TOUCH) for (const type of ['gesturestart', 'gesturechange']) scroller.addEventListener(type, (e) => e.preventDefault());
+  scroller.addEventListener('dblclick', (e) => {
+    if (e.timeStamp - touchedAt > 800) toggleZoomAt(e.clientX, e.clientY); // 触屏的双击已经处理过，这是鼠标
+  });
+  // 没按 Ctrl/⌘ 时必须原样放行，普通滚轮还要滚页面
+  scroller.addEventListener('wheel', (e) => {
+    if (!e.ctrlKey && !e.metaKey) return;
+    e.preventDefault();
+    if (!preview) beginPreview(e.clientX, e.clientY);
+    movePreview((preview.zoom / preview.start) * wheelFactor(e.deltaY, e.deltaMode), e.clientX, e.clientY);
+    clearTimeout(wheelTimer);
+    wheelTimer = setTimeout(endPreview, SETTLE_MS);
+  }, { passive: false });
 }
 
 function buildPages(numPages, width, height) {
@@ -338,6 +457,7 @@ async function open() {
   root.dataset.ready = doc.numPages;
   input.value = '';
   bindControls();
+  syncBar();
   const n = Number(location.hash.match(/^#page=(\d+)$/)?.[1]);
   setCurrent(1);
   if (n > 1) go(n);

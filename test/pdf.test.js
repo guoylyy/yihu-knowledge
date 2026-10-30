@@ -156,6 +156,7 @@ test('页面：PDF 用内置阅读器，顶部一行，不再有 iframe 和手�
   assert.match(page.text, /id="pdfv"/);
   assert.match(page.text, /data-src="\/raw\/docs\//);
   assert.match(page.text, /assets\/pdf-viewer\.mjs/);
+  assert.equal((await client.get('/assets/pdf-zoom.mjs')).status, 200);
   assert.match(page.text, /class="doc-head"/);
   assert.doesNotMatch(page.text, /<iframe/);
   assert.doesNotMatch(page.text, /手机浏览器不便内嵌/);
