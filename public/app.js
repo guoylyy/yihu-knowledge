@@ -19,7 +19,9 @@
   $('#drawer-close')?.addEventListener('click', () => setDrawer(false));
   scrim?.addEventListener('click', () => setDrawer(false));
   document.addEventListener('keydown', (e) => { if (e.key === 'Escape') setDrawer(false); });
-  $('.tree-file.active')?.scrollIntoView({ block: 'center' });
+  // 只滚目录自己：scrollIntoView 会连带滚动整页，把阅读器顶到导航栏下面
+  const activeFile = $('.tree-file.active');
+  if (activeFile) drawer.scrollTop += activeFile.getBoundingClientRect().top - drawer.getBoundingClientRect().top - drawer.clientHeight / 2;
 
   // 目录树按需加载，避免每页都带上全库的 HTML
   drawer?.addEventListener('toggle', async (e) => {
@@ -216,12 +218,28 @@
     });
   }
 
-  // iPadOS 伪装成桌面 UA，服务端判断不出来，这里再兜一次
-  const pdf = $('#pdf-frame');
-  if (pdf && navigator.maxTouchPoints > 1) {
-    pdf.remove();
-    $('#pdf-fallback').hidden = false;
-  }
+  // 文档转换中：文字预览已经在页面上，这里只等结果。成败都刷新，交给服务端决定显示什么
+  const convertStatus = $('#convert-status');
+  const watchConvert = async () => {
+    const pages = convertStatus.dataset.pages ? `共 ${convertStatus.dataset.pages} 页，` : '';
+    try {
+      const res = await fetch(convertStatus.dataset.url);
+      const data = res.ok ? await res.json() : null;
+      if (!data) throw new Error('status');
+      if (data.state === 'ready' || data.state === 'failed') { location.reload(); return; }
+      convertStatus.textContent = data.state === 'queued'
+        ? `排队中，前面还有 ${data.ahead} 个文件…`
+        : `转换中…${pages}已用 ${Math.round(data.elapsedMs / 1000)} 秒`;
+      setTimeout(watchConvert, 1500);
+    } catch {
+      convertStatus.textContent = '查不到转换进度，请刷新页面。';
+    }
+  };
+  if (convertStatus) watchConvert();
+
+  // 不支持 module 脚本的老浏览器，pdf-viewer.mjs 根本不会执行
+  const oldBrowser = !('noModule' in HTMLScriptElement.prototype);
+  if (oldBrowser && $('#pdfv')) $('#pdfv .pdfv-msg').textContent = '这个浏览器打不开在线阅读器，请点上方「下载」查看。';
 
   $$('[data-autosubmit]').forEach((el) => el.addEventListener('change', () => el.form.submit()));
 

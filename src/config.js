@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { findClaude, resolveProvider } from './ai-providers.js';
+import { findSoffice } from './convert.js';
 import { allowlistMembers } from './sso.js';
 
 export const DEFAULT_DENY = [
@@ -32,6 +33,8 @@ export const splitList = (spec = '') => spec.split(',').map((s) => s.trim()).fil
 const trimUrl = (url = '') => url.replace(/\/+$/, '');
 const dataDirOf = (env) => path.resolve(expandHome(env.KB_DATA_DIR || './data'));
 const portOf = (env) => Number(env.PORT || 3030);
+const MB = 1024 * 1024;
+const positive = (value, fallback) => (Number(value) > 0 ? Number(value) : fallback);
 
 export const configFileOf = (env = process.env) => path.join(dataDirOf(env), 'config.json');
 
@@ -145,6 +148,11 @@ export function loadConfig(env = process.env) {
     aiPlatformModel: env.AI_PLATFORM_MODEL || '',
     timeZone: env.TZ || Intl.DateTimeFormat().resolvedOptions().timeZone,
     zipMaxBytes: Number(env.KB_ZIP_MAX_MB || 1024) * 1024 * 1024,
+    previewMaxBytes: positive(env.KB_PREVIEW_MAX_MB, 200) * MB,
+    previewCacheBytes: positive(env.KB_PREVIEW_CACHE_MB, 2048) * MB,
+    convertTimeoutMs: positive(env.KB_CONVERT_TIMEOUT_S, 120) * 1000,
+    pdfMaxPages: positive(env.KB_PDF_MAX_PAGES, 50),
+    soffice: findSoffice(env),
     scanIntervalMs: 30 * 60 * 1000,
     sources,
   };

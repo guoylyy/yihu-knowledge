@@ -26,7 +26,7 @@ export function adminRoutes(deps) {
 
   r.get('/', (req, res) => {
     res.render('admin/index', {
-      pageTitle: '管理后台', section: 'index', counts: counts.get(), last: lastIndex(), running: indexer.running,
+      pageTitle: '管理后台', section: 'index', counts: counts.get(), last: lastIndex(), running: indexer.running, soffice: config.soffice,
       shareCount: shares.list().length, ai: ai.status(), aiLog: ai.recent(20), logins: auth.recentLogins(20),
       configRows: configSummary(config), configFile: config.configFile,
       authMode: config.authMode, allowedCount: allowlistMembers(config).length, deniedCount: auth.recentDenied(20).length,

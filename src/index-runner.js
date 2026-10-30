@@ -8,6 +8,11 @@ export function runWorker(workerData, onProgress) {
   });
 }
 
+export const pdfOptions = (config) => ({
+  ...(config.pdfMaxPages ? { maxPages: config.pdfMaxPages } : {}),
+  ...(config.previewMaxBytes ? { maxFileBytes: config.previewMaxBytes } : {}),
+});
+
 // 索引放到 worker 跑，全量扫描时阅读请求不被阻塞；同一时刻只跑一个
 export function createIndexRunner(config, { onProgress } = {}) {
   let running = null;
@@ -29,7 +34,7 @@ export function createIndexRunner(config, { onProgress } = {}) {
       if (full) queuedFull = true;
       return running;
     }
-    return hold(runWorker({ dataDir: config.dataDir, root: config.root, denyGlobs: config.denyGlobs, full }, onProgress));
+    return hold(runWorker({ dataDir: config.dataDir, root: config.root, denyGlobs: config.denyGlobs, full, pdf: pdfOptions(config) }, onProgress));
   }
 
   // 换库收尾时占住索引位，防止旧目录的扫描和它交错。这期间 run() 的调用方拿到的是 task 的结果，所以 task 要返回索引结果

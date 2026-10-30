@@ -60,7 +60,7 @@ async function ssoLogin(client, code, { next, headers } = {}) {
 }
 
 test('password：/login 没有平台入口；环境里有 YH_* 也不启用 SSO', async () => {
-  const env = { KB_ROOT: '/tmp', YH_CLIENT_ID: 'id', YH_CLIENT_SECRET: 's', YH_WEB_URL: 'https://one.example.com', YH_API_URL: 'http://x', YH_APP_URL: 'https://one.example.com/apps/k' };
+  const env = { KB_ROOT: '/tmp', KB_DATA_DIR: '/nonexistent/kb-data', YH_CLIENT_ID: 'id', YH_CLIENT_SECRET: 's', YH_WEB_URL: 'https://one.example.com', YH_API_URL: 'http://x', YH_APP_URL: 'https://one.example.com/apps/k' };
   const config = loadConfig(env);
   assert.equal(config.authMode, 'password');
   assert.equal(config.sso, null);

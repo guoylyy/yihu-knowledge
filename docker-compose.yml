@@ -1,6 +1,12 @@
 services:
   knowledge-base:
-    build: .
+    build:
+      context: .
+      args:
+        # 0 = 精简版（默认）；1 = 完整版，带 LibreOffice，PPT/Word 能看原版排版。改了要重新 docker compose build
+        WITH_OFFICE: ${KB_WITH_OFFICE:-0}
+    # 转换超时被杀的 soffice 子进程要有人回收，node 当 1 号进程不管这个
+    init: true
     container_name: knowledge-base
     restart: unless-stopped
     # 容器用这个 UID 写 ./data，须与宿主机 ./data 的属主一致
@@ -18,6 +24,11 @@ services:
       KB_BASE_URL: ${KB_BASE_URL:?请在 .env 中设置 KB_BASE_URL}
       KB_OWNER_NAME: ${KB_OWNER_NAME:-知识库主人}
       KB_DENY_GLOBS: ${KB_DENY_GLOBS:-}
+      KB_PREVIEW_MAX_MB: ${KB_PREVIEW_MAX_MB:-200}
+      KB_PREVIEW_CACHE_MB: ${KB_PREVIEW_CACHE_MB:-2048}
+      KB_CONVERT_TIMEOUT_S: ${KB_CONVERT_TIMEOUT_S:-120}
+      KB_PDF_MAX_PAGES: ${KB_PDF_MAX_PAGES:-50}
+      KB_SOFFICE: ${KB_SOFFICE:-}
       KB_TRUST_PROXY: ${KB_TRUST_PROXY:-1}
       AI_PROVIDER: ${AI_PROVIDER:-}
       AI_BASE_URL: ${AI_BASE_URL:-}

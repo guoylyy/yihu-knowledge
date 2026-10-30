@@ -21,8 +21,13 @@
     <tr><th scope="row">上次索引</th><td><%= fmtTime(last.at) %></td></tr>
     <tr><th scope="row">耗时</th><td><%= last.seconds.toFixed(2) %> 秒</td></tr>
     <tr><th scope="row">本次处理 / 删除</th><td><%= last.processed %> / <%= last.removed %></td></tr>
+    <% if (last.pdf) { %>
+    <tr><th scope="row">PDF</th><td><%= last.pdf.total %> 份，本次抽取 <%= last.pdf.processed %> 份（<%= last.pdf.seconds.toFixed(2) %> 秒）<% for (const [n, label] of [[last.pdf.noText, '扫描件'], [last.pdf.encrypted, '加密'], [last.pdf.failed, '读取失败'], [last.pdf.skipped, '过大跳过']]) { if (n) { %>，<%= label %> <%= n %> 份<% } } %></td></tr>
+    <% if (last.pdf.truncated) { %><tr><th scope="row">PDF 已截断</th><td><%= last.pdf.truncated %> 份，只索引了开头部分（<%= last.pdf.truncatedExamples.join('、') %><%= last.pdf.truncated > last.pdf.truncatedExamples.length ? ' 等' : '' %>）</td></tr><% } %>
+    <% } %>
   </table>
   <% } else { %><p class="muted">还没有索引记录。</p><% } %>
+  <p class="muted small">Office 原版预览：<%= typeof soffice === 'string' ? `已启用（${soffice}）` : '未安装 LibreOffice，只显示文字' %></p>
   <form method="post" action="<%= base %>/admin/reindex" class="inline">
     <input type="hidden" name="_csrf" value="<%= csrf %>">
     <button class="btn" type="submit">增量索引</button>

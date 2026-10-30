@@ -10,7 +10,7 @@
 
 ## 三个卖点
 
-- **手机可读**：服务端渲染，手机优先。支持 Obsidian 风格的双链、嵌入、Callout，也能预览图片、PDF、视频、CSV 和 Office 文本。
+- **手机可读**：服务端渲染，手机优先。支持 Obsidian 风格的双链、嵌入、Callout，内置 PDF 阅读器（手机上也能翻页、缩放，PDF 正文进搜索），也能预览图片、视频、CSV，PPT/Word 可看原版排版或文字。
 - **可控分享与访问审计**：默认全部私有，分享必须显式创建，可设有效期和访问密码，随时撤销；谁在什么时候看了哪一篇，后台都查得到。
 - **双链图谱 + AI 总结**：用 Canvas 画笔记关系；AI 一次只读当前这一篇，疑似含口令或密钥的笔记不会发出去。
 
@@ -130,6 +130,11 @@ SSO 登录走平台的 OAuth2 授权码流程：`/sso/login` 跳平台授权页�
 | `KB_DENY_GLOBS` | 空 | 追加 deny 规则，`!规则` 移除默认规则 |
 | `KB_TRUST_PROXY` | `0` | 反向代理层数，必须和实际一致，见下方安全边界 |
 | `KB_ZIP_MAX_MB` | `1024` | 目录打包下载上限 |
+| `KB_PREVIEW_MAX_MB` | `200` | 超过这个体积的 PDF / Office 不在线渲染，只给下载 |
+| `KB_PDF_MAX_PAGES` | `50` | 每份 PDF 进搜索索引的页数上限 |
+| `KB_PREVIEW_CACHE_MB` | `2048` | Office 转换缓存上限，超过时清掉最久没打开的 |
+| `KB_CONVERT_TIMEOUT_S` | `120` | 单个文件转换超时，超时退回文字预览 |
+| `KB_SOFFICE` | 自动探测 | LibreOffice 的 `soffice` 路径。配错就当没装，不会回退到别的路径 |
 | `KB_COOKIE_INSECURE` | 空 | 设为 `1` 时 cookie 不带 Secure，只用于 http 调试 |
 | `PORT` | `3030` | 监听端口 |
 
@@ -161,6 +166,30 @@ SSO 登录走平台的 OAuth2 授权码流程：`/sso/login` 跳平台授权页�
 
 这个选择和 `AUTH_MODE` 无关：环境里有 `YH_*` 时，即使是口令登录，笔记也会发给平台模型。不想这样就设 `AI_PROVIDER`。
 
+## PDF 与 Office 预览
+
+**PDF**：内置 PDF.js（在 `public/vendor/pdfjs/`，不走 CDN，内网可用），手机和平板都能连续阅读，左右滑动翻页。只渲染看到的页，大文件按 Range 分段加载。
+
+PDF 正文进搜索，AI 也能读。每份抽前 50 页、最多 2MB 文字，多出来的搜不到，「管理后台 → 索引状态」会写「已截断」。扫描件没有文字层，只能看，页面上有提示；加密的 PDF 只能下载后看。
+
+**PPT / Word**（`pptx`、`ppt`、`docx`、`doc`、`odp`）：装了 LibreOffice 时先转成 PDF 再用同一个阅读器看，版式、图片和中文都保留。第一次打开时先显示文字，转好自动刷新，之后走缓存；转换失败退回文字预览。没装时 `pptx`、`docx` 只显示文字，`ppt`、`doc`、`odp` 只能下载。
+
+LibreOffice 是可选依赖，启动时自动探测，「管理后台」能看到有没有启用。转换缓存放在 `数据目录/previews`，文件改了自动失效。
+
+| 镜像 | 体积 | PDF 阅读器 | PPT / Word |
+|---|---|---|---|
+| `Dockerfile`（精简版，默认） | 约 450MB | 有 | 只有文字 |
+| `Dockerfile.full`（完整版） | 约 1.2GB | 有 | 原版排版 |
+
+```bash
+docker build -f Dockerfile.full -t yihu-knowledge:full .
+# 或者用 compose：在 .env 里写 KB_WITH_OFFICE=1，再 docker compose up -d --build
+```
+
+不用 Docker 时执行 `brew install --cask libreoffice`（macOS）或 `apt install libreoffice-impress libreoffice-writer fonts-noto-cjk`（Linux），重启服务即可。
+
+完整版建议给 1GB 内存。实测 512MB 能转普通的 PPT（10MB 以内），28MB 和 92MB 的 PPT 会把 soffice 撑爆，这时退回文字预览，服务本身不受影响。
+
 ## 安全边界
 
 - **默认私有**：除了登录和分享链接，其余页面都要登录。
@@ -176,7 +205,8 @@ SSO 登录走平台的 OAuth2 授权码流程：`/sso/login` 跳平台授权页�
 
 ## 已知限制
 
-- Office 文件只有文本预览，不保留版式；老格式 `.doc` / `.ppt` 不支持预览。
+- 精简版镜像里 Office 文件只有文本预览，老格式 `.doc` / `.ppt` 不支持预览（完整版可以，见[上面](#pdf-与-office-预览)）。
+- PDF 阅读器不能选中文字，也不能跳到搜索命中的位置。
 - 进来的人都能打开 `/access` 改白名单，没有单独的管理员角色。
 - 向导只运行一次。之后改配置用 `/admin/settings`；deny 规则仍然只能用 `KB_DENY_GLOBS`，改完要重启。
 - 没有多租户：一个实例一个库，进来的人权限完全相同。
@@ -216,6 +246,7 @@ A self-hosted, mobile-first reader for a folder of Markdown notes: Obsidian-styl
 - **Standalone**: run `npm start` or the Docker image and open `/setup`. A four-step wizard writes `data/config.json` (mode 600) and runs the first index. Inside Docker, enter the container path (`/library`); unless you are on the server itself, the wizard asks for the setup code printed in the startup log. Afterwards, `/admin/settings` edits the library path, site info, sign-in mode, password and AI channel without a restart; changing the library builds a temporary index first, keeps serving the old one until the swap, and invalidates existing share links. Delete `config.json` and restart to reconfigure from scratch. Environment variables override `config.json`, and `docker compose` deployments that set `KB_ROOT` skip the wizard.
 - **On Yihu One**: `AUTH_MODE=sso`. Platform login plus an explicit allowlist, picked from the platform's user list at `/access` and effective immediately. An empty list denies everyone; the setup code in the startup log opens `/access?token=<code>` to add the first member. `KB_ALLOWED_USERS` (usernames or user ids) is for automated deployments: when set it overrides the UI, which turns read-only. `AUTH_MODE=both` enables both entry points.
 - **AI**: uses the platform model when `YH_CLIENT_ID` and `YH_CLIENT_SECRET` are set, otherwise any OpenAI-compatible API, the local `claude` CLI, or off. `AI_PROVIDER` overrides the choice. Only the current note is sent, and notes that look like they contain secrets are never sent.
-- **Limits**: single library per instance, no per-user permissions, the allowlist is edited by hand, Office files get text-only previews.
+- **Limits**: single library per instance, no per-user permissions, the allowlist is edited by hand, Office files get text-only previews unless LibreOffice is installed (`Dockerfile.full`, about 1.2GB, versus about 450MB for the default image).
+- **PDF**: a bundled PDF.js reader (works offline, on phones too), with PDF text indexed for search and AI.
 
 MIT licensed.

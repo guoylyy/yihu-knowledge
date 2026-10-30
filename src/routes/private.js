@@ -69,12 +69,16 @@ export function privateRoutes({ db, catalog, realRoot, auth, reader, ai, deny, s
   r.use('/v', (req, res) => { reader.view(req.ctx, req, res, req.path); });
   r.use('/d', (req, res) => reader.dir(req.ctx, req, res, req.path));
   r.use('/raw', (req, res, next) => { reader.raw(req.ctx, req, res, next, req.path); });
+  r.use('/preview', (req, res, next) => { reader.previewFile(req.ctx, req, res, next, req.path); });
+  r.use('/preview-status', (req, res) => { reader.previewStatus(req.ctx, req, res, req.path); });
   r.use('/html', (req, res, next) => { reader.html(req.ctx, req, res, next, req.path); });
   r.use('/dl', (req, res, next) => { reader.download(req.ctx, req, res, next, req.path); });
 
   const aiFile = (rel) => {
     const file = catalog.file(String(rel ?? ''));
-    return file && !deny.isDenied(file.path) && ['md', 'txt'].includes(file.ext) ? file : null;
+    if (!file || deny.isDenied(file.path)) return null;
+    const readable = ['md', 'txt'].includes(file.ext) || (file.ext === 'pdf' && JSON.parse(file.pdf_info ?? '{}').text_layer === true);
+    return readable ? file : null;
   };
   const aiHistory = (raw) => (Array.isArray(raw) ? raw : []).slice(-MAX_TURNS)
     .filter((t) => typeof t?.q === 'string' && typeof t?.a === 'string')

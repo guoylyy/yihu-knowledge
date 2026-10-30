@@ -52,8 +52,9 @@ export function createResolver(rows) {
 // 进程内快照：所有 is_denied=1 的行在这里就被丢弃，读路径只能看到这个视图
 export function createCatalog(db) {
   const generation = db.prepare("SELECT value FROM meta WHERE key = 'index_generation'").pluck();
-  const allRows = db.prepare(`SELECT id, path, name, dir, ext, size, mtime, title, excerpt, is_sensitive, words
+  const allRows = db.prepare(`SELECT id, path, name, dir, ext, size, mtime, title, excerpt, is_sensitive, words, pdf_info
                               FROM files WHERE is_denied = 0`);
+  const body = db.prepare('SELECT body FROM file_text WHERE file_id = ?').pluck();
   let cached = null;
   let cachedGen = undefined;
 
@@ -81,6 +82,7 @@ export function createCatalog(db) {
   return {
     get snapshot() { return load(); },
     file: (p) => load().byPath.get(p) ?? null,
+    body: (id) => body.get(id) ?? null,
     hasDir: (d) => load().dirs.has(d),
     list(dir) {
       const entry = load().dirs.get(dir);

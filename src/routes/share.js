@@ -82,9 +82,19 @@ export function shareRoutes({ catalog, realRoot, auth, shares, reader, config })
 
   r.get('/:token/tree', (req, res) => reader.treeFragment(req.ctx, req, res));
 
+  // 阅读器按 Range 分段取，一次阅读几十个请求，访问记录只算开头那个不带 Range 的
+  const logAsset = (req, file) => {
+    if (file && !req.get('range')) shares.logVisit(req.share, req, 'asset', file.path);
+  };
+
   r.use('/:token/raw', (req, res, next) => {
-    const file = reader.raw(req.ctx, req, res, next, req.path, 'private, max-age=300');
-    if (file) shares.logVisit(req.share, req, 'asset', file.path);
+    logAsset(req, reader.raw(req.ctx, req, res, next, req.path, 'private, max-age=300'));
+  });
+
+  r.use('/:token/preview-status', (req, res) => { reader.previewStatus(req.ctx, req, res, req.path); });
+
+  r.use('/:token/preview', (req, res, next) => {
+    logAsset(req, reader.previewFile(req.ctx, req, res, next, req.path));
   });
 
   r.use('/:token/html', (req, res, next) => {

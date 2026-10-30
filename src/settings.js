@@ -3,7 +3,7 @@ import path from 'node:path';
 import argon2 from 'argon2';
 import { AUTH_MODES, loadSetupEnv, SOURCE_LABELS } from './config.js';
 import { getMeta, setMeta } from './db.js';
-import { runWorker } from './index-runner.js';
+import { pdfOptions, runWorker } from './index-runner.js';
 import { aiProblems, inspectLibrary, KEY_MASK, nameProblems, passwordProblems, writeConfigFile } from './setup.js';
 import { allowlistMembers } from './sso.js';
 
@@ -211,7 +211,7 @@ export function createSettings({ db, config, env, deny, indexer, apply }) {
       discardTrial();
       writeConfigFile(pending, { root: report.root, at: Date.now() });
       const onProgress = ({ done, total }) => Object.assign(job, { done, total });
-      const trial = await runWorker({ dataDir: config.dataDir, dbFile: TMP_DB, root: report.root, denyGlobs: config.denyGlobs, full: true }, onProgress);
+      const trial = await runWorker({ dataDir: config.dataDir, dbFile: TMP_DB, root: report.root, denyGlobs: config.denyGlobs, full: true, pdf: pdfOptions(config) }, onProgress);
       if (!trial.total) throw new Error('新目录里没有可索引的文件');
       const anomaly = anomalyOf({ files: trial.total, md: trial.md }, job.before);
       if (anomaly && !acceptAnomaly) {

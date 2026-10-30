@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import yazl from 'yazl';
 import { highlightCode, IMAGE_EXTS, renderMarkdown, VIDEO_EXTS } from './markdown.js';
+import { CONVERT_EXTS } from './convert.js';
 import { TEXT_EXTS } from './indexer.js';
 import { decodeRel, encodePath, normalizeRel, PathRejected, resolveInside } from './paths.js';
 import { MAX_OFFICE_BYTES, MAX_SHEET_BYTES, parseCsv, previewDocx, previewPptx, previewSheet } from './preview.js';
@@ -13,7 +14,8 @@ const LANG = { json: 'json', sql: 'sql', py: 'python', js: 'javascript', ts: 'ty
 const INLINE_RAW = new Set([...IMAGE_EXTS, ...VIDEO_EXTS, 'pdf']);
 const SANDBOX_CSP = "sandbox; default-src 'none'; style-src 'unsafe-inline'; img-src 'self' data:; frame-ancestors 'self'";
 const HTML_CSP = "sandbox allow-same-origin; default-src 'none'; style-src 'unsafe-inline'; img-src 'self' data:; font-src data:; media-src 'self'; form-action 'none'; base-uri 'none'; frame-ancestors 'self'";
-const MOBILE_UA = /Mobi|Android|iPhone|iPad|iPod/i;
+const PDF_CSP = "default-src 'none'; frame-ancestors 'self'";
+const DEFAULT_PREVIEW_MAX = 200 * 1024 * 1024;
 
 // 页面顶部已有标题，正文开头的同名 H1 不再重复显示
 function dropRepeatedTitle(html, title) {
@@ -41,6 +43,8 @@ export function createContext({ catalog, realRoot, mode, base = '', prefix, allo
     href: (file, anchor) => url('v', file.path, anchor),
     raw: (file) => url('raw', file.path),
     html: (file) => url('html', file.path),
+    preview: (file) => url('preview', file.path),
+    previewStatus: (file) => url('preview-status', file.path),
     dirHref: (dir) => (dir ? url('d', dir) : mode === 'share' ? prefix : `${base}/d`),
     download: (file) => (mode === 'share' ? `${prefix}/download?path=${encodeURIComponent(file.path)}` : url('dl', file.path)),
     tagHref: (tag) => (mode === 'share' ? '#' : `${base}/search?tag=${encodeURIComponent(tag)}`),
@@ -49,6 +53,7 @@ export function createContext({ catalog, realRoot, mode, base = '', prefix, allo
     resolveRelative: (text, from) => pick(catalog.resolveRelative(text, from)),
     readNote(file) {
       if (!allow(file)) return null;
+      if (file.ext === 'pdf') return catalog.body(file.id); // PDF 没有可读的原文，AI 读的是索引抽出来的文字
       try {
         const full = resolveInside(realRoot, file.path);
         return full ? decodeText(fs.readFileSync(full)) : null;
@@ -59,7 +64,7 @@ export function createContext({ catalog, realRoot, mode, base = '', prefix, allo
   };
 }
 
-export function createReader({ db, catalog, realRoot }) {
+export function createReader({ db, catalog, realRoot, converter, previewMaxBytes = DEFAULT_PREVIEW_MAX }) {
   const backlinks = db.prepare(`SELECT DISTINCT f.path FROM links l JOIN files f ON f.id = l.src_id
                                 WHERE l.target_id = ? AND l.kind IN ('wiki', 'embed', 'md') AND l.src_id != l.target_id`).pluck();
   const fmJson = db.prepare('SELECT frontmatter_json FROM files WHERE id = ?').pluck();
@@ -84,6 +89,7 @@ export function createReader({ db, catalog, realRoot }) {
   }
 
   function office(file, full, sheet) {
+    if (CONVERT_EXTS.has(file.ext) && file.ext !== 'docx' && file.ext !== 'pptx') return { kind: 'no-text' };
     const limit = file.ext === 'docx' || file.ext === 'pptx' ? MAX_OFFICE_BYTES : MAX_SHEET_BYTES;
     if (file.size > limit) return { kind: 'too-large' };
     try {
@@ -98,6 +104,23 @@ export function createReader({ db, catalog, realRoot }) {
     }
   }
 
+  // 能转就转，转不了（没装、失败、转换中）都落到文字预览：先把能看的给出来，转好了页面自己刷新
+  function converted(ctx, file, full) {
+    const preview = () => office(file, full);
+    if (file.size > previewMaxBytes) return { kind: 'office', preview: { kind: 'too-large' } };
+    if (!converter?.enabled) return { kind: 'office', preview: preview(), convert: 'absent' };
+    const status = converter.request(file.path, full, file.ext);
+    if (status.state === 'ready') return { kind: 'pdf', src: `${ctx.preview(file)}?v=${status.key.slice(0, 12)}`, converted: true };
+    if (status.state === 'failed') return { kind: 'office', preview: preview(), convert: 'failed' };
+    return { kind: 'office', preview: preview(), convert: 'pending', statusUrl: ctx.previewStatus(file) };
+  }
+
+  function pdfBody(ctx, file) {
+    if (file.size > previewMaxBytes) return { kind: 'too-large' };
+    const info = JSON.parse(file.pdf_info ?? '{}');
+    return { kind: 'pdf', src: ctx.raw(file), textLayer: info.error ? null : info.text_layer ?? null };
+  }
+
   function content(ctx, file, full, req) {
     const { ext } = file;
     if (ext === 'md') {
@@ -107,9 +130,10 @@ export function createReader({ db, catalog, realRoot }) {
     }
     if (IMAGE_EXTS.has(ext)) return { kind: 'image', src: ctx.raw(file) };
     if (VIDEO_EXTS.has(ext)) return { kind: 'video', src: ctx.raw(file) };
-    if (ext === 'pdf') return { kind: 'pdf', src: ctx.raw(file), mobile: MOBILE_UA.test(req.get('user-agent') ?? '') };
+    if (ext === 'pdf') return pdfBody(ctx, file);
     if (ext === 'html' || ext === 'htm') return { kind: 'html', src: ctx.html(file) };
-    if (ext === 'docx' || ext === 'pptx' || ext === 'xlsx' || ext === 'xls' || ext === 'xlsm') {
+    if (CONVERT_EXTS.has(ext)) return converted(ctx, file, full);
+    if (ext === 'xlsx' || ext === 'xls' || ext === 'xlsm') {
       const sheet = typeof req.query.sheet === 'string' ? req.query.sheet : undefined;
       return { kind: 'office', preview: office(file, full, sheet) };
     }
@@ -225,9 +249,26 @@ export function createReader({ db, catalog, realRoot }) {
     if (!INLINE_RAW.has(file.ext)) return download(ctx, req, res, next, encoded);
     const headers = { 'Cache-Control': cacheControl, 'X-Content-Type-Options': 'nosniff' };
     // 所有原文件都不得在本站 origin 下执行脚本；PDF 例外是因为浏览器内置阅读器不能运行在 sandbox 文档里
-    headers['Content-Security-Policy'] = file.ext === 'pdf' ? "default-src 'none'; frame-ancestors 'self'" : SANDBOX_CSP;
+    headers['Content-Security-Policy'] = file.ext === 'pdf' ? PDF_CSP : SANDBOX_CSP;
     send(res, full, headers, next);
     return file;
+  }
+
+  // 转换后的 PDF；没转好就 404，阅读器只在转好之后才来取
+  function previewFile(ctx, req, res, next, encoded) {
+    const { file, full } = locate(ctx, encoded);
+    if (!CONVERT_EXTS.has(file.ext) || !converter?.enabled || file.size > previewMaxBytes) throw new NotFound();
+    const status = converter.request(file.path, full, file.ext);
+    if (status.state !== 'ready') throw new NotFound();
+    send(res, status.pdf, { 'Cache-Control': 'private, max-age=3600', 'X-Content-Type-Options': 'nosniff', 'Content-Security-Policy': PDF_CSP }, next);
+    return file;
+  }
+
+  function previewStatus(ctx, req, res, encoded) {
+    const { file, full } = locate(ctx, encoded);
+    if (!CONVERT_EXTS.has(file.ext) || !converter?.enabled || file.size > previewMaxBytes) throw new NotFound();
+    const { state, ahead = 0, elapsedMs = 0 } = converter.request(file.path, full, file.ext);
+    res.json({ state, ahead, elapsedMs });
   }
 
   function html(ctx, req, res, next, encoded) {
@@ -258,7 +299,7 @@ export function createReader({ db, catalog, realRoot }) {
     out.end();
   }
 
-  return { view, dir, treeFragment, raw, html, download, zip, tree };
+  return { view, dir, treeFragment, raw, html, download, zip, tree, previewFile, previewStatus };
 }
 
 export function pathErrorStatus(err) {

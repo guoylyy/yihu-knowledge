@@ -1,10 +1,23 @@
 <%- include('partials/head') %>
-<article class="page" data-path="<%= file.path %>"<% if (ctx.mode === 'private') { %> data-csrf="<%= csrf %>"<% } %>>
+<% const docView = body.kind === 'pdf'; const aiReadable = ['md', 'txt'].includes(file.ext) || (file.ext === 'pdf' && body.textLayer === true); %>
+<article class="page<%= docView ? ' page-doc' : '' %>" data-path="<%= file.path %>"<% if (ctx.mode === 'private') { %> data-csrf="<%= csrf %>"<% } %>>
+  <% if (docView) { %>
+  <header class="doc-head">
+    <h1 class="doc-name" title="<%= file.name %>"><%= file.name %></h1>
+    <span class="doc-meta"><%= sizeLabel %> · <%= (file.ext || '').toUpperCase() %></span>
+    <% if (ctx.mode === 'private' && aiReadable) { %><button class="btn" id="ai-summary" type="button"<% if (file.is_sensitive) { %> disabled aria-describedby="ai-blocked"<% } %>>AI</button><% } %>
+    <% if (ctx.mode === 'private') { %><a class="btn" href="<%= base %>/admin/shares?path=<%= encodeURIComponent(file.path) %>">分享</a><% } %>
+    <a class="btn primary" href="<%= download %>">下载</a>
+  </header>
+  <% if (ctx.mode === 'private' && file.is_sensitive) { %><p class="doc-note" id="ai-blocked">这份疑似含口令/密钥，已禁止发送给 AI，也默认禁止分享。</p><% } %>
+  <% if (body.textLayer === false) { %><p class="doc-note">这份 PDF 没有文字层（扫描件），只能看图，暂不能搜索或让 AI 读</p><% } %>
+  <%- include('partials/pdf-viewer', { src: body.src }) %>
+  <% } else { %>
   <%- include('partials/crumbs') %>
   <h1 class="page-title"><%= pageTitle %></h1>
   <div class="actions">
     <% if (ctx.mode === 'private') { %>
-    <% if (['md', 'txt'].includes(file.ext)) { %>
+    <% if (aiReadable) { %>
     <button class="btn" id="ai-summary" type="button"<% if (file.is_sensitive) { %> disabled aria-describedby="ai-blocked"<% } %>>AI 总结</button>
     <% } %>
     <a class="btn" href="<%= base %>/admin/shares?path=<%= encodeURIComponent(file.path) %>">分享</a>
@@ -28,20 +41,14 @@
   </details>
   <% } %>
 
+  <% } %>
+
   <% if (body.kind === 'md') { %>
     <div class="prose" id="content"><%- body.html %></div>
   <% } else if (body.kind === 'image') { %>
     <div class="media"><img src="<%= body.src %>" alt="<%= file.name %>"></div>
   <% } else if (body.kind === 'video') { %>
     <div class="media"><video src="<%= body.src %>" controls preload="metadata"></video></div>
-  <% } else if (body.kind === 'pdf') { %>
-    <% if (body.mobile) { %>
-    <p class="notice">手机浏览器不便内嵌 PDF，请下载后查看。</p>
-    <a class="btn primary" href="<%= download %>">下载 PDF（<%= sizeLabel %>）</a>
-    <% } else { %>
-    <iframe class="doc-frame" id="pdf-frame" src="<%= body.src %>" title="<%= file.name %>"></iframe>
-    <p class="notice" id="pdf-fallback" hidden>当前设备不便内嵌 PDF，请点上方「下载」查看。</p>
-    <% } %>
   <% } else if (body.kind === 'html') { %>
     <p class="notice">网页在沙箱中显示，脚本不会运行；需要完整效果请下载原文件。</p>
     <iframe class="doc-frame" src="<%= body.src %>" sandbox="allow-same-origin" title="<%= file.name %>"></iframe>
@@ -52,7 +59,15 @@
     <%- include('partials/grid', { rows: body.rows }) %>
     <% if (body.truncated) { %><p class="notice">仅显示前 500 行，完整内容请下载。</p><% } %>
   <% } else if (body.kind === 'office') { const p = body.preview; %>
+    <% if (body.convert === 'pending') { %>
+    <p class="notice" id="convert-status" role="status" data-url="<%= body.statusUrl %>"<% if (p.kind === 'pptx') { %> data-pages="<%= p.slides.length %>"<% } %>>转换中…</p>
+    <% } else if (body.convert === 'failed') { %>
+    <p class="notice"><%= p.kind === 'no-text' ? '转换失败，请下载查看。' : '转换失败，已退回文字预览。' %></p>
+    <% } else if (body.convert === 'absent' && ctx.mode === 'private') { %>
+    <p class="notice">当前版本未安装 LibreOffice，只显示文字。装 <code>Dockerfile.full</code> 或 <code>brew install --cask libreoffice</code> 可看原版排版</p>
+    <% } else { %>
     <p class="notice">文本预览，排版请下载原文件。</p>
+    <% } %>
     <% if (p.kind === 'docx') { %>
       <div class="prose" id="content">
       <% for (const b of p.blocks) { %>
@@ -83,6 +98,8 @@
       <% if (p.truncated) { %><p class="notice">仅显示前 200 行，完整内容请下载。</p><% } %>
     <% } else if (p.kind === 'too-large') { %>
       <p class="notice">文件过大，无法在线预览，请下载。</p>
+    <% } else if (p.kind === 'no-text') { %>
+      <p class="notice">这种格式没有文字预览，请下载查看。</p>
     <% } else { %>
       <p class="notice">无法解析这个文件（可能已加密或损坏），请下载查看。</p>
     <% } %>
@@ -105,7 +122,7 @@
   </nav>
   <% } %>
 </article>
-<% if (ctx.mode === 'private' && ['md', 'txt'].includes(file.ext) && !file.is_sensitive) { %>
+<% if (ctx.mode === 'private' && aiReadable && !file.is_sensitive) { %>
 <div class="ai-scrim" id="ai-scrim" hidden></div>
 <section class="ai-sheet" id="ai-sheet" role="dialog" aria-modal="true" aria-labelledby="ai-title" hidden>
   <div class="ai-grip" id="ai-grip" aria-hidden="true"><span></span></div>

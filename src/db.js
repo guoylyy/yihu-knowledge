@@ -119,6 +119,7 @@ const AI_LOG_ADDED = { mode: 'TEXT', model: 'TEXT', ms: 'INTEGER' };
 const SESSIONS_ADDED = { login_via: "TEXT NOT NULL DEFAULT 'password'", username: 'TEXT', user_id: 'TEXT' };
 const LOGIN_LOG_ADDED = { name: 'TEXT' };
 const SHARES_ADDED = { retired_at: 'INTEGER' };
+const FILES_ADDED = { pdf_info: 'TEXT' };
 
 function addColumns(db, table, added) {
   const columns = db.pragma(`table_info(${table})`).map((c) => c.name);
@@ -139,6 +140,7 @@ export function openDb(dataDir, file = 'kb.sqlite') {
   addColumns(db, 'sessions', SESSIONS_ADDED);
   addColumns(db, 'login_log', LOGIN_LOG_ADDED);
   addColumns(db, 'shares', SHARES_ADDED);
+  addColumns(db, 'files', FILES_ADDED);
   return db;
 }
 

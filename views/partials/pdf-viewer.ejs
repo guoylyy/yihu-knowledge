@@ -1,0 +1,20 @@
+<div class="pdfv" id="pdfv" data-src="<%= src %>" data-assets="<%= base %>/assets/vendor/pdfjs/" data-name="<%= file.name %>">
+  <div class="pdfv-scroll" tabindex="0" aria-label="<%= file.name %>"><div class="pdfv-pages"></div></div>
+  <p class="pdfv-msg" role="status">正在加载…</p>
+  <div class="pdfv-bar" role="toolbar" aria-label="阅读控制" hidden>
+    <div class="pdfv-side">
+      <button type="button" data-act="zoom-out" aria-label="缩小">−</button>
+      <button type="button" data-act="zoom-in" aria-label="放大">+</button>
+    </div>
+    <div class="pdfv-nav">
+      <button type="button" data-act="prev" aria-label="上一页">‹</button>
+      <label class="pdfv-count"><input class="pdfv-input" type="text" inputmode="numeric" enterkeyhint="go" aria-label="跳到第几页" autocomplete="off"><span>/ <span class="pdfv-total"></span></span></label>
+      <button type="button" data-act="next" aria-label="下一页">›</button>
+    </div>
+    <div class="pdfv-side end">
+      <button type="button" data-act="fit" aria-label="切换适应方式">适宽</button>
+    </div>
+  </div>
+</div>
+<noscript><p class="notice">阅读器需要 JavaScript，请点上方「下载」查看。</p></noscript>
+<script type="module" src="<%= base %>/assets/pdf-viewer.mjs"></script>

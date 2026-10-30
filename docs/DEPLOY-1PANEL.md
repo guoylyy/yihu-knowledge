@@ -41,7 +41,24 @@ mkdir -p data
 ln -s /srv/notes library
 ```
 
-## 第三步：启动
+## 第三步：选镜像
+
+| | 精简版（默认） | 完整版 |
+|---|---|---|
+| 体积 | 约 450MB | 约 1.2GB |
+| PDF 阅读器、PDF 搜索 | 有 | 有 |
+| PPT / Word | 只有文字 | 原版排版，中文、图片都在 |
+| 内存 | 256MB 够用 | 建议 1GB。512MB 转得了普通 PPT，几十 MB 的大 PPT 会转换失败、退回文字预览 |
+
+附件和 PPT 多就选完整版，主要看笔记和 PDF 选精简版。选完整版时在 `.env` 里加一行：
+
+```bash
+KB_WITH_OFFICE=1
+```
+
+以后想换，改这一行再执行 `docker compose up -d --build`，数据不受影响。转换缓存在 `data/previews`，默认最多 2GB，用 `KB_PREVIEW_CACHE_MB` 调整。
+
+## 第四步：启动
 
 在 1Panel「容器 → 编排」里选 `/opt/yihu-knowledge/docker-compose.yml` 创建编排，或者直接执行：
 
@@ -57,7 +74,7 @@ docker compose up -d --build
 curl -s http://127.0.0.1:3030/health    # 应该输出 ok
 ```
 
-## 第四步：反向代理和 HTTPS
+## 第五步：反向代理和 HTTPS
 
 在 1Panel「网站」里创建反向代理站点：
 
@@ -68,7 +85,7 @@ curl -s http://127.0.0.1:3030/health    # 应该输出 ok
 
 HTTPS 是必须的：登录 cookie 带 Secure，http 下浏览器不保存，表现为「登录后又跳回登录页」。
 
-## 第五步：确认 AI 通道
+## 第六步：确认 AI 通道
 
 打开 `https://kb.example.com/admin`，看「AI 状态」。独立部署通常用自己的 OpenAI 兼容接口，在 `.env` 里填 `AI_BASE_URL`、`AI_API_KEY`、`AI_MODEL`，然后 `docker compose up -d` 重建容器。
 

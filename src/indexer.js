@@ -4,6 +4,7 @@ import path from 'node:path';
 import { analyzeMarkdown } from './markdown.js';
 import { createResolver } from './catalog.js';
 import { getMeta, setMeta } from './db.js';
+import { indexPdfs } from './pdf-index.js';
 import { scanSecrets } from './secrets.js';
 import { countWords, decodeText, tokenizeForFts } from './text.js';
 
@@ -92,7 +93,7 @@ function statements(db) {
         name = excluded.name, dir = excluded.dir, ext = excluded.ext, size = excluded.size, mtime = excluded.mtime,
         title = excluded.title, excerpt = excluded.excerpt, frontmatter_json = excluded.frontmatter_json,
         is_denied = excluded.is_denied, is_sensitive = excluded.is_sensitive,
-        sensitive_kinds = excluded.sensitive_kinds, words = excluded.words
+        sensitive_kinds = excluded.sensitive_kinds, words = excluded.words, pdf_info = NULL
       RETURNING id`),
     clearLinks: db.prepare('DELETE FROM links WHERE src_id = ?'),
     clearTags: db.prepare('DELETE FROM tags WHERE file_id = ?'),
@@ -199,6 +200,15 @@ export function runIndex({ db, root, deny, full = false, onProgress }) {
   };
   setMeta(db, 'last_index', JSON.stringify(result));
   return result;
+}
+
+// 索引的完整入口。runIndex 保持同步（批量写事务），PDF 抽取排在它后面，报告合在一起
+export async function indexAll({ db, root, deny, full, onProgress, pdf = {} }) {
+  const result = runIndex({ db, root, deny, full, onProgress });
+  const { seconds, ...summary } = await indexPdfs({ db, root, ...pdf, onProgress });
+  const report = { ...result, pdf: { ...summary, seconds }, seconds: result.seconds + seconds, at: Date.now() };
+  setMeta(db, 'last_index', JSON.stringify(report));
+  return report;
 }
 
 // 把临时库的索引搬进正式库。kb.sqlite 里还有会话、分享和审计，不能整个文件替换；放在一个事务里，WAL 下读者提交前看到的一直是旧库。

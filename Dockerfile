@@ -4,9 +4,20 @@ RUN apt-get update && apt-get install -y --no-install-recommends python3 make g+
 WORKDIR /app
 COPY package.json package-lock.json ./
 COPY vendor ./vendor
-RUN npm ci --omit=dev
+# canvas 是 pdfjs-dist 的可选依赖，服务端只抽文字用不到，省 30MB
+RUN npm ci --omit=dev --omit=optional
+# 服务端只用 legacy 构建抽文字，浏览器用的在 public/vendor；其余（source map、现代构建、类型）占 28MB
+RUN cd node_modules/pdfjs-dist && rm -rf build web types image_decoders legacy/build/*.map legacy/build/*.min.mjs legacy/build/pdf.sandbox.*
 
 FROM node:22-bookworm-slim
+# 1 = 完整版：带 LibreOffice，PPT/Word 能看原版排版，镜像约 1.2GB。0 = 精简版：PDF 阅读器照常用，Office 只显示文字
+ARG WITH_OFFICE=0
+RUN if [ "$WITH_OFFICE" = "1" ]; then \
+      apt-get update \
+      && apt-get install -y --no-install-recommends libreoffice-impress libreoffice-writer fonts-noto-cjk fonts-liberation \
+      && rm -rf /var/lib/apt/lists/* \
+      && fc-cache -f; \
+    fi
 # 不要在这里设 KB_ROOT：设了就永远进不了配置向导。KB_IN_DOCKER 让向导提示填容器内路径
 ENV NODE_ENV=production KB_DATA_DIR=/data KB_IN_DOCKER=1 PORT=3030
 WORKDIR /app

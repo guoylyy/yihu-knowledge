@@ -6,6 +6,7 @@ import { createAi } from './ai.js';
 import { basePathOf, createAuth } from './auth.js';
 import { createCatalog } from './catalog.js';
 import { loadConfig } from './config.js';
+import { createConverter } from './convert.js';
 import { openDb } from './db.js';
 import { createDeny } from './deny.js';
 import { createIndexRunner } from './index-runner.js';
@@ -22,7 +23,7 @@ import { shareRoutes } from './routes/share.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 export const csp = (formTargets) => [
-  "default-src 'none'", "script-src 'self'", "style-src 'self'", "img-src 'self' data: https:", "media-src 'self'",
+  "default-src 'none'", "script-src 'self'", "style-src 'self'", "font-src 'self'", "img-src 'self' data: https:", "media-src 'self'",
   "frame-src 'self'", "connect-src 'self'", `form-action ${formTargets}`, "base-uri 'none'", "frame-ancestors 'self'",
 ].join('; ');
 
@@ -50,6 +51,8 @@ export async function createApp(config, { env = process.env } = {}) {
   const db = openDb(config.dataDir);
   const deny = createDeny(config.denyGlobs);
   const indexer = createIndexRunner(config);
+  // 和索引 worker 一样不随设置重建：队列里的转换不能因为改了站点名就丢掉
+  const converter = createConverter({ dataDir: config.dataDir, soffice: config.soffice, timeoutMs: config.convertTimeoutMs, cacheBytes: config.previewCacheBytes });
   const settings = createSettings({
     db, config, env, deny, indexer,
     async apply() {
@@ -69,11 +72,11 @@ export async function createApp(config, { env = process.env } = {}) {
     const auth = createAuth({ db, config });
     await auth.init();
     const shares = createShares({ db, catalog, config, deny });
-    const reader = createReader({ db, catalog, realRoot });
+    const reader = createReader({ db, catalog, realRoot, converter, previewMaxBytes: config.previewMaxBytes });
     const ai = createAi({ db, config });
     const sso = config.sso && !config.sso.problem ? createSso(config.sso) : null;
     const platformUsers = createPlatformUsers(config.sso ?? {});
-    const deps = { db, config, deny, realRoot, catalog, auth, shares, reader, ai, indexer, sso, platformUsers, settings };
+    const deps = { db, config, deny, realRoot, catalog, auth, shares, reader, ai, indexer, sso, platformUsers, settings, converter };
     // 「退出平台登录」是表单提交后 303 到平台，Chrome 的 form-action 连重定向目标一起管
     const CSP = csp(sso ? `'self' ${new URL(config.sso.webUrl).origin}` : "'self'");
 
@@ -88,6 +91,11 @@ export async function createApp(config, { env = process.env } = {}) {
     app.locals.fmtTime = (ts) => (ts ? dateFmt.format(ts) : '—');
 
     app.use(commonHeaders(CSP, config.baseUrl));
+    // PDF.js 的 worker 要编译 wasm 解 JPEG2000/JBIG2。worker 的 CSP 取自它自己的响应头，只放开这个目录，页面本身不放宽
+    app.use('/assets/vendor/pdfjs', (req, res, next) => {
+      res.set('Content-Security-Policy', CSP.replace("script-src 'self'", "script-src 'self' 'wasm-unsafe-eval'"));
+      next();
+    });
     app.use('/assets', express.static(path.join(here, '..', 'public'), { maxAge: '1h', etag: true }));
     app.get(['/health', '/healthz'], (req, res) => res.type('text').send('ok'));
     // 必须排在登录拦截之前：否则未登录时是 302 到 /login，等于告诉外人这条路径有特殊待遇
@@ -126,5 +134,5 @@ export async function createApp(config, { env = process.env } = {}) {
   app.disable('x-powered-by');
   app.use((req, res, next) => live(req, res, next));
 
-  return { app, ...deps, close: () => db.close() };
+  return { app, ...deps, close: () => { converter.close(); db.close(); } };
 }
