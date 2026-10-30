@@ -17,10 +17,27 @@ import { privateRoutes } from './routes/private.js';
 import { shareRoutes } from './routes/share.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
-const csp = (formTargets) => [
+export const csp = (formTargets) => [
   "default-src 'none'", "script-src 'self'", "style-src 'self'", "img-src 'self' data: https:", "media-src 'self'",
   "frame-src 'self'", "connect-src 'self'", `form-action ${formTargets}`, "base-uri 'none'", "frame-ancestors 'self'",
 ].join('; ');
+
+// 向导和正式应用共用：路径前缀 + 安全响应头
+export const commonHeaders = (policy, baseUrl) => (req, res, next) => {
+  req.base = basePathOf(req);
+  res.locals.base = req.base;
+  res.set({
+    'Content-Security-Policy': policy,
+    'X-Content-Type-Options': 'nosniff',
+    'Referrer-Policy': 'no-referrer',
+    'X-Frame-Options': 'SAMEORIGIN',
+    'Cache-Control': 'no-store',
+  });
+  if (baseUrl.startsWith('https:')) res.set('Strict-Transport-Security', 'max-age=31536000');
+  next();
+};
+
+export const notFound = (req, res) => res.status(404).render('error', { pageTitle: '未找到', ctx: null, title: '未找到', message: '页面不存在，或你没有访问权限。' });
 
 export async function createApp(config) {
   const db = openDb(config.dataDir);
@@ -43,26 +60,16 @@ export async function createApp(config) {
   app.set('trust proxy', config.trustProxy);
   app.set('view engine', 'ejs');
   app.set('views', path.join(here, '..', 'views'));
-  app.locals.siteName = '知识库';
+  app.locals.siteName = config.siteName ?? '知识库';
   app.locals.ownerName = config.ownerName;
   const dateFmt = new Intl.DateTimeFormat('zh-CN', { timeZone: config.timeZone, dateStyle: 'short', timeStyle: 'short' });
   app.locals.fmtTime = (ts) => (ts ? dateFmt.format(ts) : '—');
 
-  app.use((req, res, next) => {
-    req.base = basePathOf(req);
-    res.locals.base = req.base;
-    res.set({
-      'Content-Security-Policy': CSP,
-      'X-Content-Type-Options': 'nosniff',
-      'Referrer-Policy': 'no-referrer',
-      'X-Frame-Options': 'SAMEORIGIN',
-      'Cache-Control': 'no-store',
-    });
-    if (config.baseUrl.startsWith('https:')) res.set('Strict-Transport-Security', 'max-age=31536000');
-    next();
-  });
+  app.use(commonHeaders(CSP, config.baseUrl));
   app.use('/assets', express.static(path.join(here, '..', 'public'), { maxAge: '1h', etag: true }));
   app.get(['/health', '/healthz'], (req, res) => res.type('text').send('ok'));
+  // 必须排在登录拦截之前：否则未登录时是 302 到 /login，等于告诉外人这条路径有特殊待遇
+  app.all(['/setup', '/setup/{*rest}'], notFound);
   app.use(express.urlencoded({ extended: false, limit: '32kb' }));
   app.use(express.json({ limit: '256kb' }));
   app.use(auth.session);
@@ -74,7 +81,7 @@ export async function createApp(config) {
   app.use(privateRoutes(deps));
   app.use('/admin', adminRoutes(deps));
 
-  app.use((req, res) => res.status(404).render('error', { pageTitle: '未找到', ctx: null, title: '未找到', message: '页面不存在，或你没有访问权限。' }));
+  app.use(notFound);
   // eslint-disable-next-line no-unused-vars
   app.use((err, req, res, next) => {
     const status = pathErrorStatus(err) ?? (err.status >= 400 && err.status < 500 ? err.status : 500);

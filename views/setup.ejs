@@ -1,0 +1,87 @@
+<%- include('partials/head') %>
+<div class="page setup">
+  <h1 class="page-title">配置知识库</h1>
+<% if (phase !== 'form') { %>
+  <section class="form-card" id="setup-progress" data-url="<%= base %>/setup/progress" data-done-url="<%= base %>/login">
+    <h2>正在建立索引</h2>
+    <p class="muted">配置已保存。建立完索引会自动跳到登录页，这个页面不用动。</p>
+    <progress id="progress-bar" max="<%= total || 1 %>" value="<%= done %>"></progress>
+    <p class="muted small" id="progress-text" role="status"><%= done %> / <%= total %></p>
+  </section>
+<% } else { %>
+  <p class="muted">这四步填完就能用。这个页面只在第一次出现，配置完成后就关闭了。</p>
+  <% for (const error of errors) { %><p class="alert" role="alert"><%= error %></p><% } %>
+  <% if (dataProblem) { %><p class="alert" role="alert"><%= dataProblem %></p><% } %>
+  <% if (env.overrides.length) { %><p class="notice">已检测到环境变量 <%= env.overrides.join('、') %>，它们优先于这里的选择。</p><% } %>
+  <form method="post" action="<%= base %>/setup" class="stack" id="setup-form" data-check-url="<%= base %>/setup/check" data-min-password="<%= minPassword %>" novalidate>
+    <% if (needsToken) { %>
+    <fieldset class="form-card stack">
+      <legend>设置码</legend>
+      <p class="muted small">你不是在服务器本机上打开的。为防止别人抢先配置，请填启动日志里的设置码<% if (env.inDocker) { %>（<code>docker logs 容器名</code>）<% } %>。</p>
+      <label>设置码<input name="token" id="setup-token" value="<%= token %>" autocomplete="off" autocapitalize="off" spellcheck="false"></label>
+    </fieldset>
+    <% } %>
+
+    <fieldset class="form-card stack">
+      <legend>1. 知识库目录</legend>
+      <div class="setup-inline">
+        <label>目录的绝对路径<input name="root" id="setup-root" value="<%= form.root ?? '' %>" placeholder="<%= env.inDocker ? '/library' : '/home/me/notes' %>" autocomplete="off" autocapitalize="off" spellcheck="false"></label>
+        <button class="btn" type="button" id="setup-check">检测</button>
+      </div>
+      <% if (env.inDocker) { %>
+      <p class="notice">现在运行在容器里，要填<strong>容器内</strong>路径，例如 <code>/library</code>，对应启动时挂载的目录：<br><code>docker run -v /你的/知识库:/library:ro ...</code></p>
+      <% } %>
+      <div id="check-result" aria-live="polite"></div>
+    </fieldset>
+
+    <fieldset class="form-card stack">
+      <legend>2. 站点信息</legend>
+      <div class="row">
+        <label>站点名<input name="siteName" value="<%= form.siteName ?? '知识库' %>" maxlength="40"></label>
+        <label>主人名<input name="ownerName" value="<%= form.ownerName ?? '管理员' %>" maxlength="40"></label>
+      </div>
+      <p class="muted small">分享页显示「来自 主人名 的分享」。分享链接的地址取当前访问地址<% if (publicUrl) { %>：<code><%= publicUrl %></code><% } %>，换域名后用 <code>KB_BASE_URL</code> 覆盖。</p>
+    </fieldset>
+
+    <% const ssoOff = env.ssoMissing.length > 0; const authMode = form.authMode ?? 'password'; %>
+    <fieldset class="form-card stack">
+      <legend>3. 谁能进</legend>
+      <label class="choice"><input type="radio" name="authMode" value="password"<%= authMode === 'password' ? ' checked' : '' %>><span><strong>只用口令</strong><small class="muted">一个人用，最简单</small></span></label>
+      <label class="choice"><input type="radio" name="authMode" value="sso"<%= authMode === 'sso' && !ssoOff ? ' checked' : '' %><%= ssoOff ? ' disabled' : '' %>><span><strong>只用平台登录</strong><small class="muted"><%= ssoOff ? '未检测到平台应用凭证' : '平台账号，且在白名单里' %></small></span></label>
+      <label class="choice"><input type="radio" name="authMode" value="both"<%= authMode === 'both' && !ssoOff ? ' checked' : '' %><%= ssoOff ? ' disabled' : '' %>><span><strong>两者都开</strong><small class="muted"><%= ssoOff ? '未检测到平台应用凭证' : '口令不受白名单限制' %></small></span></label>
+      <div class="stack" data-show-auth="password both">
+        <div class="setup-inline">
+          <label>口令（至少 <%= minPassword %> 位）<input type="password" name="password" id="setup-password" autocomplete="new-password"></label>
+          <button class="btn" type="button" id="setup-generate">生成强口令</button>
+        </div>
+        <p class="muted small" id="password-note" hidden>已生成并显示在上面，请先存好。只保存它的 hash，忘了只能重新配置。</p>
+      </div>
+      <div class="stack" data-show-auth="sso both">
+        <label>白名单用户名（逗号分隔）<input name="allowedUsers" value="<%= form.allowedUsers ?? '' %>" autocomplete="off" autocapitalize="off" spellcheck="false"></label>
+        <p class="muted small">留空 = 谁都不能进。</p>
+      </div>
+    </fieldset>
+
+    <% const platformOff = env.platformAiMissing.length > 0; const aiChoice = form.aiProvider ?? (platformOff ? 'off' : 'platform'); %>
+    <fieldset class="form-card stack">
+      <legend>4. AI（可跳过）</legend>
+      <label class="choice"><input type="radio" name="aiProvider" value="platform"<%= aiChoice === 'platform' && !platformOff ? ' checked' : '' %><%= platformOff ? ' disabled' : '' %>><span><strong>平台模型</strong><small class="muted"><%= platformOff ? '未检测到平台应用凭证' : '将使用平台模型，无需 key' %></small></span></label>
+      <label class="choice"><input type="radio" name="aiProvider" value="openai"<%= aiChoice === 'openai' ? ' checked' : '' %>><span><strong>OpenAI 兼容接口</strong><small class="muted">自己的接口地址和 key</small></span></label>
+      <label class="choice"><input type="radio" name="aiProvider" value="claude-cli"<%= aiChoice === 'claude-cli' && env.claudeBin ? ' checked' : '' %><%= env.claudeBin ? '' : ' disabled' %>><span><strong>本机 Claude 命令行</strong><small class="muted"><%= env.claudeBin ? '已检测到 claude' : '本机没有 claude 命令行' %></small></span></label>
+      <label class="choice"><input type="radio" name="aiProvider" value="off"<%= aiChoice === 'off' ? ' checked' : '' %>><span><strong>先关掉</strong><small class="muted">之后可以用环境变量打开</small></span></label>
+      <div class="stack" data-show-ai="openai">
+        <label>接口地址<input name="aiBaseUrl" value="<%= form.aiBaseUrl ?? '' %>" placeholder="https://api.example.com/v1" autocomplete="off" autocapitalize="off" spellcheck="false"></label>
+        <label>API Key<input type="password" name="aiApiKey" placeholder="<%= keySaved ? keyMask : '' %>" autocomplete="off"></label>
+        <p class="muted small"><%= keySaved ? '已填过，留空表示不修改。' : '' %>key 明文保存在 config.json（权限 600），只有运行用户可读。</p>
+        <label>模型名<input name="aiModel" value="<%= form.aiModel ?? '' %>" autocomplete="off" autocapitalize="off" spellcheck="false"></label>
+      </div>
+    </fieldset>
+
+    <p class="alert" id="form-error" role="alert" hidden></p>
+    <button class="btn primary" type="submit">保存并开始索引</button>
+    <p class="muted small">要重新配置：删除 <code><%= env.configFile %></code> 并重启服务。</p>
+  </form>
+<% } %>
+</div>
+<script src="<%= base %>/assets/setup.js" defer></script>
+<%- include('partials/foot') %>

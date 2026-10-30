@@ -14,13 +14,15 @@ const BATCH = 250;
 
 export const TEXT_EXTS = new Set(['txt', 'json', 'sql', 'csv', 'py', 'js', 'ts', 'yaml', 'yml', 'sh', 'css', 'xml', 'log', 'base']);
 
+// 符号链接一律不跟随；Icon\r 这类带控制字符的系统文件不是用户内容
+export const isIgnoredEntry = (entry) => entry.isSymbolicLink() || /[\x00-\x1f\x7f\\]/.test(entry.name);
+
 function walk(root, deny) {
   const found = [];
   let denied = 0;
   const visit = (absDir, relDir) => {
     for (const entry of fs.readdirSync(absDir, { withFileTypes: true })) {
-      // 符号链接一律不跟随；Icon\r 这类带控制字符的系统文件不是用户内容
-      if (entry.isSymbolicLink() || /[\x00-\x1f\x7f\\]/.test(entry.name)) continue;
+      if (isIgnoredEntry(entry)) continue;
       const rel = relDir ? `${relDir}/${entry.name}` : entry.name;
       const abs = path.join(absDir, entry.name);
       if (entry.isDirectory()) {
@@ -150,7 +152,7 @@ function resolveLinks(db) {
   return resolved;
 }
 
-export function runIndex({ db, root, deny, full = false }) {
+export function runIndex({ db, root, deny, full = false, onProgress }) {
   const started = performance.now();
   const realRoot = fs.realpathSync(root);
   const fingerprint = createHash('sha256').update(`${PARSER_VERSION}\n${deny.globs.join('\n')}`).digest('hex');
@@ -169,7 +171,10 @@ export function runIndex({ db, root, deny, full = false }) {
   const dropFile = (row) => { st.clearFts.run(row.id); st.deleteFile.run(row.id); };
   db.transaction(() => removed.forEach(dropFile))();
   const writeBatch = db.transaction((batch) => batch.forEach((e) => writeEntry(st, e)));
-  for (let i = 0; i < changed.length; i += BATCH) writeBatch(changed.slice(i, i + BATCH));
+  for (let i = 0; i < changed.length; i += BATCH) {
+    writeBatch(changed.slice(i, i + BATCH));
+    onProgress?.({ done: Math.min(i + BATCH, changed.length), total: changed.length });
+  }
 
   const generation = Number(getMeta(db, 'index_generation') ?? 0);
   const finish = db.transaction(() => {

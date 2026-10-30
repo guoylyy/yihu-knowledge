@@ -6,7 +6,8 @@ import { runIndex } from './indexer.js';
 const { dataDir, root, denyGlobs, full } = workerData;
 const db = openDb(dataDir);
 try {
-  parentPort.postMessage({ result: runIndex({ db, root, deny: createDeny(denyGlobs), full }) });
+  const onProgress = (progress) => parentPort.postMessage({ progress });
+  parentPort.postMessage({ result: runIndex({ db, root, deny: createDeny(denyGlobs), full, onProgress }) });
 } finally {
   db.close();
 }

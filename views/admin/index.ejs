@@ -46,5 +46,11 @@
     <tbody><% for (const l of aiLog) { %><tr><td class="nowrap"><%= fmtTime(l.ts) %></td><td><%= l.path %></td><td><%= l.chars %></td><td><%= aiStatus[l.status] ?? l.status %></td><td class="nowrap"><%= l.ms == null ? '—' : `${(l.ms / 1000).toFixed(1)} 秒` %></td></tr><% } %></tbody>
   </table></div>
   <% } else { %><p class="muted">还没有调用记录。</p><% } %>
+  <h2>配置来源</h2>
+  <p class="muted small">环境变量优先于配置文件。<% if (configFile) { %>要重新配置：删除 <code><%= configFile %></code> 并重启。<% } %></p>
+  <div class="table-wrap"><table class="grid">
+    <thead><tr><th>配置项</th><th>当前值</th><th>来源</th></tr></thead>
+    <tbody><% for (const row of configRows) { %><tr><td class="nowrap"><%= row.label %></td><td><%= row.value %></td><td class="nowrap"><%= row.source %></td></tr><% } %></tbody>
+  </table></div>
 </div>
 <%- include('../partials/foot') %>

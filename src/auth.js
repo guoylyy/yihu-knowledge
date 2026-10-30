@@ -73,6 +73,11 @@ export function createAuth({ db, config }) {
     if (!config.password) throw new Error('缺少 KB_PASSWORD 环境变量');
     if (isHash(config.password)) {
       passwordHash = config.password;
+      // 重新跑向导换了口令时，旧口令签发的会话不能留着
+      if (getMeta(db, 'auth_hash') !== passwordHash) {
+        setMeta(db, 'auth_hash', passwordHash);
+        db.prepare("DELETE FROM sessions WHERE login_via = 'password'").run();
+      }
     } else {
       if (config.password.length < 8) throw new Error('KB_PASSWORD 至少 8 位');
       const stored = getMeta(db, 'auth_hash');

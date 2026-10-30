@@ -1,3 +1,4 @@
+import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { findClaude, resolveProvider } from './ai-providers.js';
@@ -26,18 +27,57 @@ export function effectiveDenyGlobs(spec = '') {
 
 export const AUTH_MODES = ['password', 'sso', 'both'];
 
-const splitList = (spec = '') => spec.split(',').map((s) => s.trim()).filter(Boolean);
+export const splitList = (spec = '') => spec.split(',').map((s) => s.trim()).filter(Boolean);
 const trimUrl = (url = '') => url.replace(/\/+$/, '');
+const dataDirOf = (env) => path.resolve(expandHome(env.KB_DATA_DIR || './data'));
+const portOf = (env) => Number(env.PORT || 3030);
+
+export const configFileOf = (env = process.env) => path.join(dataDirOf(env), 'config.json');
+
+// 文件坏了要报错而不是当成「未配置」：否则一次手误就把向导重新暴露出来
+function readConfigFile(env) {
+  const file = configFileOf(env);
+  let text;
+  try {
+    text = fs.readFileSync(file, 'utf8');
+  } catch (err) {
+    if (err.code === 'ENOENT' || err.code === 'ENOTDIR') return null;
+    throw new Error(`读不了配置文件 ${file}（${err.code}）`);
+  }
+  try {
+    const parsed = JSON.parse(text);
+    if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) return parsed;
+  } catch { /* 走下面的统一报错 */ }
+  throw new Error(`配置文件不是合法的 JSON：${file}。修好它，或删除后重启重新配置`);
+}
+
+export const needsSetup = (env = process.env) => !env.KB_ROOT && !readConfigFile(env);
+
+// 向导要知道的环境信息都从这里拿
+export function loadSetupEnv(env = process.env) {
+  const missing = (names) => names.filter((k) => !env[k]);
+  return {
+    dataDir: dataDirOf(env),
+    configFile: configFileOf(env),
+    port: portOf(env),
+    inDocker: env.KB_IN_DOCKER === '1' || fs.existsSync('/.dockerenv'),
+    ssoMissing: missing(['YH_CLIENT_ID', 'YH_CLIENT_SECRET', 'YH_WEB_URL', 'YH_API_URL']),
+    platformAiMissing: missing(['YH_CLIENT_ID', 'YH_CLIENT_SECRET', 'YH_API_URL']),
+    claudeBin: findClaude(env),
+    denyGlobs: effectiveDenyGlobs(env.KB_DENY_GLOBS),
+    overrides: ['AUTH_MODE', 'KB_PASSWORD', 'KB_ALLOWED_USERS', 'KB_OWNER_NAME', 'KB_BASE_URL', 'AI_PROVIDER', 'AI_BASE_URL', 'AI_API_KEY', 'AI_MODEL'].filter((k) => env[k]),
+  };
+}
 
 // password 模式返回 null：即使环境里有 YH_*，也完全不启用 SSO
-function loadSso(env, authMode) {
+function loadSso(env, authMode, fileBaseUrl) {
   if (authMode === 'password') return null;
   const sso = {
     clientId: env.YH_CLIENT_ID || '',
     clientSecret: env.YH_CLIENT_SECRET || '',
     webUrl: trimUrl(env.YH_WEB_URL),
     apiUrl: trimUrl(env.YH_API_URL),
-    appUrl: trimUrl(env.YH_APP_URL || env.KB_BASE_URL),
+    appUrl: trimUrl(env.YH_APP_URL || env.KB_BASE_URL || fileBaseUrl),
     basePath: trimUrl(env.YH_BASE_PATH),
   };
   const missing = [['YH_CLIENT_ID', sso.clientId], ['YH_CLIENT_SECRET', sso.clientSecret], ['YH_WEB_URL', sso.webUrl], ['YH_API_URL', sso.apiUrl], ['YH_APP_URL', sso.appUrl]]
@@ -45,30 +85,47 @@ function loadSso(env, authMode) {
   return { ...sso, problem: missing.length ? `未配置 ${missing.join(' / ')}` : null };
 }
 
+// 优先级：环境变量 > config.json > 默认值。空字符串算没设，docker compose 会把没填的变量传成空串
 export function loadConfig(env = process.env) {
-  if (!env.KB_ROOT) throw new Error('缺少 KB_ROOT 环境变量');
-  const authMode = (env.AUTH_MODE || 'password').trim().toLowerCase();
+  const file = readConfigFile(env);
+  const ai = file?.ai ?? {};
+  const sources = {};
+  const pick = (key, envValue, fileValue, fallback = '') => {
+    if (envValue) { sources[key] = 'env'; return envValue; }
+    if (fileValue?.length) { sources[key] = 'file'; return fileValue; }
+    sources[key] = 'default';
+    return fallback;
+  };
+
+  const rootSpec = pick('root', env.KB_ROOT, file?.root);
+  if (!rootSpec) throw new Error('缺少 KB_ROOT 环境变量，也没有 config.json。先用 npm start 打开配置向导');
+  const authMode = pick('authMode', env.AUTH_MODE, file?.authMode, 'password').trim().toLowerCase();
   if (!AUTH_MODES.includes(authMode)) throw new Error(`AUTH_MODE 只能是 ${AUTH_MODES.join(' / ')}`);
-  const port = Number(env.PORT || 3030);
+  const port = portOf(env);
   const appUrl = authMode === 'password' ? '' : env.YH_APP_URL;
+  const baseUrl = trimUrl(pick('baseUrl', env.KB_BASE_URL || appUrl, file?.baseUrl, `http://localhost:${port}`));
+  const aiProvider = pick('aiProvider', env.AI_PROVIDER, ai.provider, resolveProvider(env));
   return {
-    root: path.resolve(expandHome(env.KB_ROOT)),
-    dataDir: path.resolve(expandHome(env.KB_DATA_DIR || './data')),
-    password: env.KB_PASSWORD || '',
+    root: path.resolve(expandHome(rootSpec)),
+    dataDir: dataDirOf(env),
+    configFile: file ? configFileOf(env) : null,
+    password: pick('password', env.KB_PASSWORD, file?.passwordHash),
     authMode,
-    allowedUsers: splitList(env.KB_ALLOWED_USERS),
-    sso: loadSso(env, authMode),
-    baseUrl: trimUrl(env.KB_BASE_URL || appUrl || `http://localhost:${port}`),
+    allowedUsers: pick('allowedUsers', env.KB_ALLOWED_USERS && splitList(env.KB_ALLOWED_USERS), file?.allowedUsers, []),
+    sso: loadSso(env, authMode, file?.baseUrl),
+    baseUrl,
     port,
     denyGlobs: effectiveDenyGlobs(env.KB_DENY_GLOBS),
-    ownerName: env.KB_OWNER_NAME || '知识库主人',
+    siteName: pick('siteName', '', file?.siteName, '知识库'),
+    ownerName: pick('ownerName', env.KB_OWNER_NAME, file?.ownerName, '知识库主人'),
     trustProxy: Number(env.KB_TRUST_PROXY || 0),
-    cookieSecure: env.KB_COOKIE_INSECURE !== '1',
-    aiProvider: resolveProvider(env),
+    // 向导配出来的实例常常先跑在 http 上，带 Secure 的 cookie 浏览器不存，表现为登录后又跳回登录页
+    cookieSecure: env.KB_COOKIE_INSECURE !== '1' && !(file && baseUrl.startsWith('http:')),
+    aiProvider,
     aiMaxChars: Number(env.AI_MAX_CHARS) > 0 ? Number(env.AI_MAX_CHARS) : 40000,
-    aiBaseUrl: env.AI_BASE_URL || '',
-    aiApiKey: env.AI_API_KEY || '',
-    aiModel: env.AI_MODEL || '',
+    aiBaseUrl: pick('aiBaseUrl', env.AI_BASE_URL, ai.baseUrl),
+    aiApiKey: pick('aiApiKey', env.AI_API_KEY, ai.apiKey),
+    aiModel: pick('aiModel', env.AI_MODEL, ai.model),
     aiCliModel: env.AI_CLI_MODEL || '',
     aiClaudeBin: findClaude(env),
     aiPlatformUrl: trimUrl(env.YH_API_URL),
@@ -78,7 +135,28 @@ export function loadConfig(env = process.env) {
     timeZone: env.TZ || Intl.DateTimeFormat().resolvedOptions().timeZone,
     zipMaxBytes: Number(env.KB_ZIP_MAX_MB || 1024) * 1024 * 1024,
     scanIntervalMs: 30 * 60 * 1000,
+    sources,
   };
+}
+
+const SOURCE_LABELS = { env: '环境变量', file: '配置文件', default: '默认值' };
+
+// /admin 用来排查「这一项到底是谁定的」；口令和 key 只说有没有，不给值
+export function configSummary(config) {
+  const isSet = (v) => (v ? '已设置' : '未设置');
+  return [
+    ['知识库目录', 'root', config.root],
+    ['站点名', 'siteName', config.siteName],
+    ['主人名', 'ownerName', config.ownerName],
+    ['对外地址', 'baseUrl', config.baseUrl],
+    ['登录方式', 'authMode', config.authMode],
+    ['登录口令', 'password', isSet(config.password)],
+    ['白名单', 'allowedUsers', `${config.allowedUsers.length} 人`],
+    ['AI 通道', 'aiProvider', config.aiProvider],
+    ['AI 接口地址', 'aiBaseUrl', config.aiBaseUrl || '—'],
+    ['AI Key', 'aiApiKey', isSet(config.aiApiKey)],
+    ['AI 模型', 'aiModel', config.aiModel || '—'],
+  ].map(([label, key, value]) => ({ label, value, source: SOURCE_LABELS[config.sources?.[key]] ?? '—' }));
 }
 
 // 启动时打到日志；都不致命：登录页会把同样的原因展示给访问者
@@ -87,5 +165,6 @@ export function authWarnings(config) {
   if (config.sso?.problem) out.push(`AUTH_MODE=${config.authMode} 但${config.sso.problem}，平台登录入口已禁用`);
   if (config.sso && !config.allowedUsers.length) out.push('KB_ALLOWED_USERS 为空，所有平台账号都会被拒绝');
   if (config.authMode === 'sso' && config.password) out.push('AUTH_MODE=sso 时 KB_PASSWORD 不生效，口令登录已关闭');
+  if (config.configFile && !config.cookieSecure) out.push(`对外地址是 ${config.baseUrl}，登录 cookie 不带 Secure。公网部署请走 HTTPS，并设 KB_BASE_URL`);
   return out;
 }

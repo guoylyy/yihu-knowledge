@@ -286,3 +286,22 @@ input:not([type="checkbox"]), select { min-height: 42px; padding: 0 10px; border
   .graph-bar { right: auto; width: 26rem; }
   .graph-sheet { inset: auto 24px 0 auto; width: 26rem; height: auto; border: 1px solid var(--border); border-bottom: 0; }
 }
+
+.setup { max-width: 40rem; }
+.setup [hidden] { display: none; }
+.setup fieldset { margin: 0; min-width: 0; }
+.setup legend { padding: 0 6px; font-weight: 600; }
+.setup code { overflow-wrap: anywhere; }
+.setup .tiles { margin: 0; }
+.setup .tiles dd { font-size: 1.15rem; }
+.setup #check-result:empty { display: none; }
+.setup #check-result > * + * { margin-top: 8px; }
+.setup-inline { display: flex; align-items: flex-end; gap: 8px; }
+.setup-inline label { flex: 1; min-width: 0; }
+.setup-inline .btn { flex: none; min-height: 42px; }
+.setup label.choice { flex-direction: row; align-items: center; gap: 10px; padding: 6px 2px; color: var(--text); font-size: 1rem; cursor: pointer; }
+.setup label.choice:has(input:disabled) { opacity: .55; cursor: not-allowed; }
+.setup .choice input { flex: none; width: 20px; min-height: 20px; margin: 0; accent-color: var(--accent); }
+.setup .choice span { display: flex; flex-direction: column; min-width: 0; }
+.setup .choice small { font-size: .8rem; }
+.setup progress { display: block; width: 100%; height: 10px; accent-color: var(--accent); }

@@ -2,6 +2,8 @@
 
 这份文档面向「一台自己的服务器，一个人用」，也就是 `AUTH_MODE=password`。平台部署见 [README](../README.md#平台部署以虎-one-应用)。
 
+这里用 `docker compose` 和 `.env` 配置，不经过网页向导（compose 固定设了 `KB_ROOT`）。想用向导见 [README 的快速开始](../README.md#快速开始独立部署)。
+
 ## 准备
 
 - 一台装好 Docker 和 1Panel 的服务器
@@ -131,6 +133,7 @@ rclone mount remote:notes /srv/notes \
 | 改口令 | 改 `.env` 后 `docker compose up -d`，口令登录的旧会话全部失效 |
 | 备份 | 备份 `./data` 和 `.env`。`data/` 里有全文索引，和笔记同等敏感 |
 | 看日志 | `docker compose logs -f` |
+| 查配置来源 | 后台 `/admin` 的「配置来源」，显示每一项来自环境变量还是配置文件 |
 | 忘记口令 | 改 `.env` 里的 `KB_PASSWORD` 即可，没有别的恢复流程 |
 
 ## 常见问题

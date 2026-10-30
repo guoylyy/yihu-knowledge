@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import QRCode from 'qrcode';
+import { configSummary } from '../config.js';
 import { getMeta } from '../db.js';
 import { ShareError, EXPIRY_DAYS } from '../shares.js';
 
@@ -25,6 +26,7 @@ export function adminRoutes({ db, config, auth, shares, indexer, catalog, ai }) 
     res.render('admin/index', {
       pageTitle: '管理后台', section: 'index', counts: counts.get(), last: lastIndex(), running: indexer.running,
       shareCount: shares.list().length, ai: ai.status(), aiLog: ai.recent(20), logins: auth.recentLogins(20),
+      configRows: configSummary(config), configFile: config.configFile,
     });
   });
 
