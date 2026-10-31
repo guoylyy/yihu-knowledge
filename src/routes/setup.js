@@ -7,6 +7,7 @@ import express from 'express';
 import { healthCheck } from '../about.js';
 import { lastAllowlist, membersFromIds, pickAllowlist, rememberAllowlist, withMembers } from '../allowlist.js';
 import { commonHeaders, csp, MAX_FORM_FIELDS } from '../app.js';
+import { browseHandler, createBrowser } from '../browse.js';
 import { createDeny } from '../deny.js';
 import { createIndexRunner } from '../index-runner.js';
 import { buildConfigFile, dataDirProblem, inspectLibrary, KEY_MASK, MIN_PASSWORD, validateForm, writeConfigFile } from '../setup.js';
@@ -44,8 +45,9 @@ function publicUrl(req) {
   return /^https?$/.test(proto) && /^[\w.:[\]-]+$/.test(host ?? '') ? `${proto}://${host}${req.base}` : '';
 }
 
-export function createSetupApp({ setupEnv, token, platformUsers, loadFinalConfig, finish }) {
+export function createSetupApp({ setupEnv, mounts = [], token, platformUsers, loadFinalConfig, finish }) {
   const deny = createDeny(setupEnv.denyGlobs);
+  const browser = createBrowser({ roots: setupEnv.kbRoots, mounts, deny, dataDir: setupEnv.dataDir, inDocker: setupEnv.inDocker, soffice: setupEnv.soffice });
   const state = { phase: 'form', done: 0, total: 0, form: {}, errors: [], keyDraft: '' };
   const previous = lastAllowlist(setupEnv.dataDir);
 
@@ -58,6 +60,13 @@ export function createSetupApp({ setupEnv, token, platformUsers, loadFinalConfig
     if (tokenMatches(req.body?.token)) return null;
     if (!isLocalRequest(req)) return '设置码不正确。设置码打印在服务启动日志里。';
     return isSameOrigin(req) ? null : '请求来源不对，请从配置页面提交。';
+  };
+
+  // 向导还没有账号，这里的「登录」就是本机或设置码。/setup 谁都打得开，容器里有什么不能跟着公开，所以挂载提示也走这个接口
+  const requireSetupAccess = (req, res, next) => {
+    if (tokenMatches(req.get('x-setup-token') ?? req.query.token)) return next();
+    if (isLocalRequest(req) && isSameOrigin(req)) return next();
+    res.status(401).json({ error: 'setup-token-required' });
   };
 
   const app = express();
@@ -117,6 +126,8 @@ export function createSetupApp({ setupEnv, token, platformUsers, loadFinalConfig
   app.get('/setup/progress', (req, res) => {
     res.json({ phase: state.phase, done: state.done, total: state.total, error: state.errors[0] ?? null });
   });
+
+  app.get('/setup/browse', requireSetupAccess, browseHandler(() => browser));
 
   app.post('/setup/check', async (req, res) => {
     const problem = accessProblem(req);

@@ -45,8 +45,10 @@ for (const width of [375, 1440]) {
   const w = await wizard({ KB_DATA_DIR: path.join(base, `data-${width}`) });
   await page.goto(`${w.origin}/`);
   if (!page.url().endsWith('/setup')) problems.push(`${width}: 没有跳到 /setup`);
+  await page.waitForSelector('#dir-list:not([aria-busy])', { state: 'attached' });
   await capture(page, width, 'form');
 
+  await page.click('#setup-advanced summary');
   await page.fill('#setup-root', '/no/such/dir');
   await page.click('#setup-check');
   await page.waitForSelector('#check-result .alert');
@@ -93,6 +95,8 @@ for (const width of [375, 1440]) {
   });
   await page.goto(`${yh.origin}/setup`);
   await page.locator('input[name=authMode][value=both]').check({ force: true });
+  // 目录列表是异步来的：等它回来再截，也别在请求途中把服务停掉
+  await page.waitForSelector('#dir-list:not([aria-busy])', { state: 'attached' });
   await capture(page, width, 'platform-docker');
   await stop(yh);
   await context.close();

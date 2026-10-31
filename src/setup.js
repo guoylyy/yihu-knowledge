@@ -15,6 +15,7 @@ export const KEY_MASK = '******';
 const MAX_SCAN_ENTRIES = 200000;
 const FILES_PER_SECOND = 800;
 const EXAMPLES = 5;
+const LIBRARY_DIR = 'library';
 
 const isDenied = (err) => err.code === 'EACCES' || err.code === 'EPERM';
 
@@ -39,6 +40,16 @@ export function dataDirProblem(dataDir) {
   }
 }
 
+// 库里的文件都会被索引并可分享，数据目录放在里面的话 config.json 也在其中。
+// 数据目录下的 library 子目录是例外：镜像的 KB_DATA_DIR=/data，文档约定的挂载点就是 /data/library，这个名字应用自己不用
+export function dataDirProblemOf(realRoot, dataDir) {
+  const realData = fs.existsSync(dataDir) ? fs.realpathSync(dataDir) : path.resolve(dataDir);
+  if (realRoot === realData) return '这就是数据目录本身，配置文件和数据库会被当成笔记。换一个目录';
+  if (isInside(realRoot, realData)) return '数据目录在这个目录里面，配置文件和数据库会被当成笔记。换一个目录，或用 KB_DATA_DIR 把数据放到库外面';
+  if (isInside(realData, realRoot) && !isInside(path.join(realData, LIBRARY_DIR), realRoot)) return '这个目录在数据目录里面，数据目录不能当知识库用。换一个目录';
+  return null;
+}
+
 // 口径和 indexer 的 walk 一致：不跟随符号链接、deny 目录不进入。用异步 readdir，大目录扫描时其它请求还能响应
 export async function inspectLibrary(input, { deny, dataDir }) {
   const root = expandRoot(input);
@@ -53,13 +64,8 @@ export async function inspectLibrary(input, { deny, dataDir }) {
     if (isDenied(err)) return { ok: false, error: '没有读取权限' };
     throw err;
   }
-  // 库里的文件都会被索引并可分享，数据目录放在里面的话 config.json 也在其中
-  const realData = fs.existsSync(dataDir) ? fs.realpathSync(dataDir) : path.resolve(dataDir);
-  if (realRoot === realData) return { ok: false, error: '这就是数据目录本身，配置文件和数据库会被当成笔记。换一个目录' };
-  if (isInside(realRoot, realData)) {
-    return { ok: false, error: '数据目录在这个目录里面，配置文件和数据库会被当成笔记。换一个目录，或用 KB_DATA_DIR 把数据放到库外面' };
-  }
-  if (isInside(realData, realRoot)) return { ok: false, error: '这个目录在数据目录里面，数据目录不能当知识库用。换一个目录' };
+  const dataProblem = dataDirProblemOf(realRoot, dataDir);
+  if (dataProblem) return { ok: false, error: dataProblem };
 
   const byExt = {};
   const deniedExamples = [];

@@ -1,0 +1,17 @@
+<div class="dir-browser stack" id="dir-browser" data-url="<%= url %>" data-input="<%= input %>" data-check="<%= check %>">
+  <div class="stack" id="dir-hints" aria-live="polite" hidden></div>
+  <div class="dir-command stack" id="dir-command" hidden>
+    <p class="notice" id="dir-command-note"></p>
+    <pre><code id="dir-command-text"></code></pre>
+    <button class="btn" type="button" id="dir-command-copy">复制命令</button>
+  </div>
+  <div class="stack" id="dir-panel" hidden>
+    <p class="dir-lead"><strong>选择你的笔记目录</strong></p>
+    <nav class="dir-crumbs" id="dir-crumbs" aria-label="当前位置"></nav>
+    <button class="btn primary dir-pick" type="button" id="dir-pick" hidden></button>
+    <input type="search" id="dir-filter" placeholder="按名字过滤子目录" aria-label="按名字过滤子目录" autocomplete="off" autocapitalize="off" spellcheck="false" hidden>
+    <p class="muted small" id="dir-status" role="status" hidden></p>
+    <ul class="dir-list" id="dir-list"></ul>
+  </div>
+  <p class="notice" id="dir-selected" role="status" hidden></p>
+</div>

@@ -45,11 +45,13 @@
     const button = event.currentTarget;
     button.disabled = true;
     result.textContent = '检测中…';
+    const root = $('#setup-root').value;
+    window.dirBrowserPeek?.(root).then((quick) => { if (quick && button.disabled) result.textContent = `检测中…（${quick}）`; });
     try {
       const res = await fetch(form.dataset.checkUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ root: $('#setup-root').value, token: $('#setup-token')?.value }),
+        body: JSON.stringify({ root, token: $('#setup-token')?.value }),
       });
       showReport(await res.json());
     } catch {

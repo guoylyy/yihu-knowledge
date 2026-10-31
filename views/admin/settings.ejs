@@ -53,12 +53,25 @@
       <% if (job.phase === 'anomaly') { %><p class="alert" role="alert"><%= job.error %>。没有替换，勾选「确认这就是我要的库」后再提交一次。</p><% } %>
       <form method="post" action="<%= base %>/admin/settings/library" class="stack" id="library-form" data-check-url="<%= base %>/admin/settings/library/check">
         <input type="hidden" name="_csrf" value="<%= csrf %>">
-        <div class="setup-inline">
-          <label>目录的绝对路径<input name="root" id="library-root" value="<%= form.root ?? (job.phase === 'anomaly' ? job.root : config.root) %>" autocomplete="off" autocapitalize="off" spellcheck="false"<%= fields.root.locked ? ' disabled' : '' %>></label>
-          <% if (!fields.root.locked) { %><button class="btn" type="button" id="library-check">检测</button><% } %>
-        </div>
+        <% const rootValue = form.root ?? (job.phase === 'anomaly' ? job.root : config.root); %>
+        <% if (fields.root.locked) { %>
+        <label>知识库目录<input name="root" id="library-root" value="<%= rootValue %>" disabled></label>
         <%- note('root') %>
-        <% if (env.inDocker) { %><p class="notice">现在运行在容器里，要填<strong>容器内</strong>路径。新目录得先挂载进容器。</p><% } %>
+        <% } else { %>
+        <p class="muted small">当前目录：<code><%= config.root %></code></p>
+        <%- include('../partials/dir-browser', { url: `${base}/admin/browse`, input: '#library-root', check: '#library-check' }) %>
+        <details class="dir-advanced" id="library-advanced"<%= form.root ? ' open' : '' %>>
+          <summary>高级：手填路径</summary>
+          <div class="stack">
+            <div class="setup-inline">
+              <label>目录的绝对路径<input name="root" id="library-root" value="<%= rootValue %>" autocomplete="off" autocapitalize="off" spellcheck="false"></label>
+              <button class="btn" type="button" id="library-check">检测</button>
+            </div>
+            <%- note('root') %>
+            <% if (env.inDocker) { %><p class="muted small">现在运行在容器里，要填<strong>容器内</strong>路径。新目录得先挂载进容器。</p><% } %>
+          </div>
+        </details>
+        <% } %>
         <div id="check-result" aria-live="polite"></div>
         <% if (!fields.root.locked) { %>
         <button class="btn primary settings-save" type="button" id="library-save">更换目录</button>
@@ -186,5 +199,6 @@
   <% } else { %><p class="muted">还没有调用记录。</p><% } %>
 </div>
 <script src="<%= base %>/assets/library-report.js" defer></script>
+<script src="<%= base %>/assets/dir-browser.js" defer></script>
 <script src="<%= base %>/assets/settings.js" defer></script>
 <%- include('../partials/foot') %>

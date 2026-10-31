@@ -23,11 +23,11 @@
 ```bash
 git clone https://github.com/guoylyy/yihu-knowledge.git && cd yihu-knowledge
 docker build -t yihu-knowledge .
-docker run -d --name kb -p 3030:3030 -v /你的/知识库:/library:ro -v kb-data:/data yihu-knowledge
+docker run -d --name kb -p 3030:3030 -v "/你的/笔记目录:/data/library:ro" -v kb-data:/data yihu-knowledge
 docker logs kb | grep 设置码      # 打开 http://服务器:3030/setup 时要填，见下方「卡住了看这里」
 ```
 
-向导里的知识库目录填**容器内路径** `/library`，不是你电脑上的路径。
+向导第一步会列出容器里能选的目录，带 md 文件数和只读/读写标记，点进去选就行。知道路径的话可以展开「高级」手填，填的是**容器内路径**，不是你电脑上的路径。什么都没挂时，页面会给出可复制的 `docker run` 命令。
 
 **不用 Docker（Node 22+）：**
 
@@ -40,7 +40,7 @@ npm start                         # 打开 http://localhost:3030
 
 ### 卡住了看这里
 
-- **Docker 下目录检测报「目录不存在」**：填的是宿主机路径。向导运行在容器里，只看得见 `-v` 挂进去的目录，`-v /你的/知识库:/library:ro` 对应要填 `/library`。
+- **Docker 下目录检测报「目录不存在」**：填的是宿主机路径。向导运行在容器里，只看得见 `-v` 挂进去的目录，`-v /你的/笔记目录:/data/library:ro` 对应要填 `/data/library`。
 - **页面要「设置码」**：只有在服务器本机直接打开才免填。从别的设备、反向代理或 Docker 端口映射进来时都要填，它打印在启动日志里（`docker logs kb`）。这样服务暴露在公网时，别人不能抢在你前面配置，也不能用检测接口探测服务器目录。
 - **页面提示数据目录写不进去**：Docker 用 `-v kb-data:/data` 这样的命名卷最省事。如果绑定宿主机目录（`-v ./data:/data`），它的属主必须是 UID 1000，否则先 `sudo chown 1000 ./data`。
 - **没挂 `/data`**：容器重建后配置和索引都会丢，又回到向导。
@@ -123,6 +123,7 @@ SSO 登录走平台的 OAuth2 授权码流程：`/sso/login` 跳平台授权页�
 | 变量 | 默认 | 说明 |
 |---|---|---|
 | `KB_ROOT` | 向导填写 | 知识库根目录，只读。设了它就不进向导 |
+| `KB_ROOTS` | `/library,/data/library,/vaults,/host,/mnt,/media` | 目录浏览器允许看的根，逗号分隔，也可写进 `config.json`。范围外的路径和指向范围外的符号链接一律 403。手打路径不受它限制 |
 | `KB_DATA_DIR` | `./data` | 数据目录，放数据库和 `config.json`，里面有库内全文，权限 700，不要外传。Docker 镜像默认 `/data` |
 | `KB_BASE_URL` | 向导时的访问地址，否则 `http://localhost:<端口>` | 分享链接前缀。`sso`、`both` 下缺省取 `YH_APP_URL` |
 | `KB_OWNER_NAME` | 知识库主人 | 分享页署名 |
@@ -243,7 +244,7 @@ npm run screenshots:setup  # 配置向导截图，顺带在真浏览器里走一
 
 A self-hosted, mobile-first reader for a folder of Markdown notes: Obsidian-style wiki links, a link graph, controlled sharing with access logs, and per-note AI summaries.
 
-- **Standalone**: run `npm start` or the Docker image and open `/setup`. A four-step wizard writes `data/config.json` (mode 600) and runs the first index. Inside Docker, enter the container path (`/library`); unless you are on the server itself, the wizard asks for the setup code printed in the startup log. Afterwards, `/admin/settings` edits the library path, site info, sign-in mode, password and AI channel without a restart; changing the library builds a temporary index first, keeps serving the old one until the swap, and invalidates existing share links. Delete `config.json` and restart to reconfigure from scratch. Environment variables override `config.json`, and `docker compose` deployments that set `KB_ROOT` skip the wizard.
+- **Standalone**: run `npm start` or the Docker image and open `/setup`. A four-step wizard writes `data/config.json` (mode 600) and runs the first index. Inside Docker, pick a mounted directory in the browser (or enter its container path, e.g. `/data/library`, under Advanced); unless you are on the server itself, the wizard asks for the setup code printed in the startup log. Afterwards, `/admin/settings` edits the library path, site info, sign-in mode, password and AI channel without a restart; changing the library builds a temporary index first, keeps serving the old one until the swap, and invalidates existing share links. Delete `config.json` and restart to reconfigure from scratch. Environment variables override `config.json`, and `docker compose` deployments that set `KB_ROOT` skip the wizard.
 - **On Yihu One**: `AUTH_MODE=sso`. Platform login plus an explicit allowlist, picked from the platform's user list at `/access` and effective immediately. An empty list denies everyone; the setup code in the startup log opens `/access?token=<code>` to add the first member. `KB_ALLOWED_USERS` (usernames or user ids) is for automated deployments: when set it overrides the UI, which turns read-only. `AUTH_MODE=both` enables both entry points.
 - **AI**: uses the platform model when `YH_CLIENT_ID` and `YH_CLIENT_SECRET` are set, otherwise any OpenAI-compatible API, the local `claude` CLI, or off. `AI_PROVIDER` overrides the choice. Only the current note is sent, and notes that look like they contain secrets are never sent.
 - **Limits**: single library per instance, no per-user permissions, the allowlist is edited by hand, Office files get text-only previews unless LibreOffice is installed (`Dockerfile.full`, about 1.2GB, versus about 450MB for the default image).

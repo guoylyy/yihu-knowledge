@@ -72,6 +72,7 @@ for (const width of [375, 1440]) {
   await page.locator('input[name=aiProvider][value=openai]').check({ force: true });
 
   // 预检失败
+  await page.click('#library-advanced summary');
   await page.fill('#library-root', path.join(base, 'nope'));
   await page.click('#library-check');
   await page.waitForSelector('#check-result .alert');

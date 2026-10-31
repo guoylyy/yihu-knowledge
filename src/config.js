@@ -28,8 +28,14 @@ export function effectiveDenyGlobs(spec = '') {
 }
 
 export const AUTH_MODES = ['password', 'sso', 'both'];
+export const DEFAULT_KB_ROOTS = ['/library', '/data/library', '/vaults', '/host', '/mnt', '/media'];
 
 export const splitList = (spec = '') => spec.split(',').map((s) => s.trim()).filter(Boolean);
+// 目录浏览器能看的范围。相对路径没有意义，直接丢掉；一条都不剩时退回默认值，不会变成“哪都能看”
+function kbRootsOf(spec) {
+  const list = (Array.isArray(spec) ? spec : splitList(String(spec ?? ''))).map((p) => expandHome(String(p).trim())).filter((p) => path.isAbsolute(p));
+  return list.length ? list.map((p) => path.resolve(p)) : DEFAULT_KB_ROOTS;
+}
 const trimUrl = (url = '') => url.replace(/\/+$/, '');
 const dataDirOf = (env) => path.resolve(expandHome(env.KB_DATA_DIR || './data'));
 const portOf = (env) => Number(env.PORT || 3030);
@@ -70,6 +76,7 @@ export function loadSetupEnv(env = process.env) {
     claudeBin: findClaude(env),
     soffice: findSoffice(env),
     denyGlobs: effectiveDenyGlobs(env.KB_DENY_GLOBS),
+    kbRoots: kbRootsOf(env.KB_ROOTS),
     overrides: ['AUTH_MODE', 'KB_PASSWORD', 'KB_ALLOWED_USERS', 'KB_OWNER_NAME', 'KB_BASE_URL', 'AI_PROVIDER', 'AI_BASE_URL', 'AI_API_KEY', 'AI_MODEL'].filter((k) => env[k]),
   };
 }
@@ -131,6 +138,7 @@ export function loadConfig(env = process.env) {
     baseUrl,
     port,
     denyGlobs: effectiveDenyGlobs(env.KB_DENY_GLOBS),
+    kbRoots: kbRootsOf(env.KB_ROOTS || file?.KB_ROOTS),
     siteName: pick('siteName', '', file?.siteName, '知识库'),
     ownerName: pick('ownerName', env.KB_OWNER_NAME, file?.ownerName, '知识库主人'),
     trustProxy: Number(env.KB_TRUST_PROXY || 0),

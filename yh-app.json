@@ -4,7 +4,7 @@
   "icon": "📚",
   "category": "效率",
   "description": "手机优先的个人知识库：阅读 Markdown 笔记、可控分享与访问审计、双链图谱、AI 总结",
-  "version": "1.4.2",
+  "version": "1.5.0",
   "port": 3030,
   "health": "/health",
   "callback": "/sso/callback",
@@ -15,13 +15,21 @@
   "isDefault": false,
   "env": {
     "AUTH_MODE": "sso",
-    "KB_ROOT": "/data/library",
     "KB_DATA_DIR": "/data/db",
     "KB_TRUST_PROXY": "1"
   },
   "deploy": {
     "branch": "release",
-    "mode": "manual"
+    "mode": "manual",
+    "mounts": [
+      {
+        "name": "library",
+        "container": "/data/library",
+        "mode": "ro",
+        "required": false,
+        "description": "知识库目录（宿主机上的笔记/Obsidian 目录）"
+      }
+    ]
   },
   "ui": {
     "responsive": true

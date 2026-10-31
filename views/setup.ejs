@@ -24,13 +24,17 @@
 
     <fieldset class="form-card stack">
       <legend>1. 知识库目录</legend>
-      <div class="setup-inline">
-        <label>目录的绝对路径<input name="root" id="setup-root" value="<%= form.root ?? '' %>" placeholder="<%= env.inDocker ? '/library' : '/home/me/notes' %>" autocomplete="off" autocapitalize="off" spellcheck="false"></label>
-        <button class="btn" type="button" id="setup-check">检测</button>
-      </div>
-      <% if (env.inDocker) { %>
-      <p class="notice">现在运行在容器里，要填<strong>容器内</strong>路径，例如 <code>/library</code>，对应启动时挂载的目录：<br><code>docker run -v /你的/知识库:/library:ro ...</code></p>
-      <% } %>
+      <%- include('partials/dir-browser', { url: `${base}/setup/browse`, input: '#setup-root', check: '#setup-check' }) %>
+      <details class="dir-advanced" id="setup-advanced"<%= form.root ? ' open' : '' %>>
+        <summary>高级：手填路径</summary>
+        <div class="stack">
+          <div class="setup-inline">
+            <label>目录的绝对路径<input name="root" id="setup-root" value="<%= form.root ?? '' %>" placeholder="<%= env.inDocker ? '/data/library' : '/home/me/notes' %>" autocomplete="off" autocapitalize="off" spellcheck="false"></label>
+            <button class="btn" type="button" id="setup-check">检测</button>
+          </div>
+          <% if (env.inDocker) { %><p class="muted small">现在运行在容器里，要填<strong>容器内</strong>路径。</p><% } %>
+        </div>
+      </details>
       <div id="check-result" aria-live="polite"></div>
     </fieldset>
 
@@ -93,6 +97,7 @@
 <% } %>
 </div>
 <script src="<%= base %>/assets/library-report.js" defer></script>
+<script src="<%= base %>/assets/dir-browser.js" defer></script>
 <script src="<%= base %>/assets/setup.js" defer></script>
 <script src="<%= base %>/assets/user-picker.js" defer></script>
 <%- include('partials/foot') %>

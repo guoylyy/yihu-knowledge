@@ -1,13 +1,14 @@
 import { Router } from 'express';
 import QRCode from 'qrcode';
-import { configSummary } from '../config.js';
+import { browseHandler, createBrowser } from '../browse.js';
+import { configSummary, loadSetupEnv } from '../config.js';
 import { getMeta } from '../db.js';
 import { allowlistMembers } from '../sso.js';
 import { ShareError, EXPIRY_DAYS } from '../shares.js';
 import { settingsRoutes } from './settings.js';
 
 export function adminRoutes(deps) {
-  const { db, config, auth, shares, indexer, catalog, ai } = deps;
+  const { db, config, deny, auth, shares, indexer, catalog, ai, mounts, env } = deps;
   const r = Router();
   const counts = db.prepare(`SELECT COUNT(CASE WHEN is_denied = 0 THEN 1 END) AS indexed, COUNT(CASE WHEN is_denied = 1 THEN 1 END) AS denied,
                                     COUNT(CASE WHEN is_sensitive = 1 THEN 1 END) AS sensitive FROM files`);
@@ -39,6 +40,9 @@ export function adminRoutes(deps) {
   });
 
   r.use('/settings', settingsRoutes(deps));
+
+  const { inDocker } = loadSetupEnv(env);
+  r.get('/browse', browseHandler(() => createBrowser({ roots: config.kbRoots ?? [], mounts, deny, dataDir: config.dataDir, inDocker, soffice: config.soffice })));
 
   r.get('/paths', (req, res) => {
     const q = String(req.query.q ?? '').toLowerCase();

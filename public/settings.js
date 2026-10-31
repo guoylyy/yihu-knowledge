@@ -59,6 +59,7 @@
     const button = event.currentTarget;
     button.disabled = true;
     result.textContent = '检测中…';
+    window.dirBrowserPeek?.($('#library-root').value).then((quick) => { if (quick && button.disabled) result.textContent = `检测中…（${quick}）`; });
     window.showLibraryReport(result, await check());
     button.disabled = false;
   });

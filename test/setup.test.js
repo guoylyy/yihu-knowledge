@@ -509,8 +509,8 @@ test('Docker：提示填容器内路径', async () => {
   const w = await startWizard({ KB_IN_DOCKER: '1' });
   try {
     const page = await w.get('/setup');
-    assert.match(page.text, /placeholder="\/library"/);
-    assert.match(page.text, /docker run -v \/你的\/知识库:\/library:ro/);
+    assert.match(page.text, /placeholder="\/data\/library"/);
+    assert.match(page.text, /要填<strong>容器内<\/strong>路径/);
   } finally {
     await w.stop();
   }

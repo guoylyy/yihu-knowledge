@@ -311,6 +311,30 @@ input:not([type="checkbox"]), select { min-height: 42px; padding: 0 10px; border
 .setup .choice span { display: flex; flex-direction: column; min-width: 0; }
 .setup .choice small { font-size: .8rem; }
 .setup progress { display: block; width: 100%; height: 10px; accent-color: var(--accent); }
+.dir-lead { margin: 0; }
+.dir-hint-link { padding: 0; border: 0; background: none; color: var(--accent); font: inherit; font-family: var(--mono); text-decoration: underline; cursor: pointer; overflow-wrap: anywhere; }
+.dir-crumbs { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 4px; font-size: .9rem; }
+.dir-crumb { min-height: 32px; padding: 4px 6px; border: 0; border-radius: 6px; background: none; color: var(--accent); font: inherit; cursor: pointer; overflow-wrap: anywhere; text-align: left; }
+.dir-crumb:hover { background: var(--surface-2); }
+.dir-crumb-here { padding: 4px 6px; font-weight: 600; overflow-wrap: anywhere; }
+.dir-crumb-sep { color: var(--muted); }
+.dir-pick { align-self: flex-start; max-width: 100%; }
+.dir-list { margin: 0; padding: 0; list-style: none; border: 1px solid var(--border); border-radius: 8px; max-height: 24rem; overflow-y: auto; }
+.dir-list:empty { display: none; }
+.dir-list[aria-busy] { opacity: .6; }
+.dir-row { display: flex; align-items: center; gap: 10px; padding: 8px 10px; }
+.dir-row + .dir-row { border-top: 1px solid var(--border); }
+.dir-text { display: flex; flex: 1; flex-direction: column; gap: 2px; min-width: 0; }
+.dir-name { overflow-wrap: anywhere; }
+.dir-meta { display: flex; align-items: center; gap: 8px; color: var(--muted); font-size: .8rem; font-variant-numeric: tabular-nums; }
+.dir-tag { padding: 0 6px; border-radius: 4px; background: var(--accent-soft); color: var(--text); }
+.dir-tag.readonly { background: var(--surface-2); }
+.dir-enter { flex: none; min-height: 40px; }
+.dir-command pre { margin: 0; padding: 10px 12px; overflow-x: auto; border-radius: 8px; background: var(--code-bg); font-size: .8rem; }
+.dir-command code { overflow-wrap: normal; white-space: pre; }
+.dir-command .btn { align-self: flex-start; }
+.dir-advanced summary { padding: 6px 0; color: var(--muted); cursor: pointer; }
+.dir-advanced > .stack { margin-top: 8px; }
 .settings-forms { margin-bottom: 8px; }
 .settings-forms h3 { margin: 8px 0 0; font-size: 1rem; }
 .settings-forms input:disabled { opacity: .6; cursor: not-allowed; background: var(--surface-2); }

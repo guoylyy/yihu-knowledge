@@ -48,7 +48,7 @@ export const commonHeaders = (policy, baseUrl) => (req, res, next) => {
 
 export const notFound = (req, res) => res.status(404).render('error', { pageTitle: '未找到', ctx: null, title: '未找到', message: '页面不存在，或你没有访问权限。' });
 
-export async function createApp(config, { env = process.env } = {}) {
+export async function createApp(config, { env = process.env, mounts = [] } = {}) {
   const db = openDb(config.dataDir);
   const deny = createDeny(config.denyGlobs);
   const indexer = createIndexRunner(config);
@@ -77,7 +77,7 @@ export async function createApp(config, { env = process.env } = {}) {
     const ai = createAi({ db, config });
     const sso = config.sso && !config.sso.problem ? createSso(config.sso) : null;
     const platformUsers = createPlatformUsers(config.sso ?? {});
-    const deps = { db, config, deny, realRoot, catalog, auth, shares, reader, ai, indexer, sso, platformUsers, settings, converter };
+    const deps = { db, config, deny, realRoot, catalog, auth, shares, reader, ai, indexer, sso, platformUsers, settings, converter, mounts, env };
     // 「退出平台登录」是表单提交后 303 到平台，Chrome 的 form-action 连重定向目标一起管
     const CSP = csp(sso ? `'self' ${new URL(config.sso.webUrl).origin}` : "'self'");
 
