@@ -1,0 +1,154 @@
+/* 由 scripts/sync-vi.mjs 从 yihu-one 平台同步，勿手改 */
+:root {
+  --yh-primary: #1c1917;
+  --yh-primary-rgb: 28, 25, 23;
+  --yh-primary-dark: #454241;
+  --yh-primary-deep: #1c1917;
+  --yh-primary-light: #6b6a68;
+  --yh-primary-soft: #e8e8e8;
+  --yh-on-primary: #faf9f7;
+  --yh-highlight: #d2521e;
+  --yh-highlight-rgb: 210, 82, 30;
+  --yh-highlight-soft: #fbeee9;
+  --yh-accent: #d2521e;
+  --yh-accent-light: #e28f6d;
+  --yh-accent-deep: #1c1917;
+  --yh-glow: #77361b;
+  --yh-glow-rgb: 119, 54, 27;
+  --yh-gradient: var(--yh-primary);
+  --yh-hero: #1c1917;
+  --yh-hero-ai: #1c1917;
+  --yh-glow-shadow: 0 4px 14px rgba(28, 25, 23, .18);
+  --yh-ai: #b9481a;
+  --yh-ai-soft: #fcf3ef;
+  --yh-bg: #faf9f7;
+  --yh-card: #ffffff;
+  --yh-card-rgb: 255, 255, 255;
+  --yh-sidebar: #faf9f7;
+  --yh-hover: #f0efed;
+  --yh-fill: #f9f9f9;
+  --yh-fill-2: #f4f4f3;
+  --yh-fill-3: #eae9e7;
+  --yh-border: #eae7e2;
+  --yh-border-soft: #f1efec;
+  --yh-border-strong: #dad7d2;
+  --yh-text: #1c1917;
+  --yh-text-2: #5c574f;
+  --yh-text-3: #8f8a82;
+  --yh-danger: #c2362b;
+  --yh-success: #2e7d4f;
+  --yh-warning: #b3450f;
+  --yh-radius: 12px;
+  --yh-radius-sm: 8px;
+  --yh-shadow: none;
+  --yh-shadow-lg: 0 8px 24px rgba(28, 25, 23, 0.08);
+  --yh-font: 'Manrope Variable', 'Manrope', 'Noto Sans SC', 'Source Han Sans SC', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', system-ui, sans-serif;
+  --yh-font-num: 'Manrope Variable', 'Manrope', system-ui, sans-serif;
+  --yh-nav-active-bg: #1c1917;
+  --yh-nav-active-color: #faf9f7;
+  --yh-nav-tick: #d2521e;
+  --el-color-primary: #1c1917;
+  --el-color-success: #2e7d4f;
+  --el-color-danger: #c2362b;
+  --yh-sidebar-w: 216px;
+  --yh-header-h: 56px;
+  --yh-tabbar-h: 58px;
+}
+
+/* === 组件（本文件手写，同步时保留）=== */
+/* 平台令牌只有浅色，知识库有深色模式和主题开关，所以深色值写在这里。主色在深色下跟正文同色，否则近黑落在深色底上看不见。
+   强调色两种模式同值，顶栏图标才和 favicon 一致 */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --yh-primary: #e8e5dd; --yh-primary-rgb: 232, 229, 221; --yh-primary-dark: #c9c6be; --yh-primary-soft: #3a3832; --yh-on-primary: #171714;
+    --yh-highlight-soft: #4a2a1a;
+    --yh-bg: #171714; --yh-card: #201f1b; --yh-hover: #2a2924; --yh-fill: #24231f; --yh-fill-2: #2a2924; --yh-fill-3: #3a3832;
+    --yh-border: #3a3832; --yh-border-soft: #2a2924; --yh-border-strong: #4a4840;
+    --yh-text: #e8e5dd; --yh-text-2: #a09c91; --yh-text-3: #8f8b80;
+    --yh-danger: #f2877e; --yh-success: #8fd19e; --yh-warning: #e6b673;
+  }
+}
+:root[data-theme="dark"] {
+  --yh-primary: #e8e5dd; --yh-primary-rgb: 232, 229, 221; --yh-primary-dark: #c9c6be; --yh-primary-soft: #3a3832; --yh-on-primary: #171714;
+  --yh-highlight-soft: #4a2a1a;
+  --yh-bg: #171714; --yh-card: #201f1b; --yh-hover: #2a2924; --yh-fill: #24231f; --yh-fill-2: #2a2924; --yh-fill-3: #3a3832;
+  --yh-border: #3a3832; --yh-border-soft: #2a2924; --yh-border-strong: #4a4840;
+  --yh-text: #e8e5dd; --yh-text-2: #a09c91; --yh-text-3: #8f8b80;
+  --yh-danger: #f2877e; --yh-success: #8fd19e; --yh-warning: #e6b673;
+}
+
+/* 平台没有对应令牌的知识库自有色：代码高亮，以及 PDF / 文档 / 二维码的纸面（深色模式下也必须是白纸） */
+:root {
+  --tok-kw: #a0304e; --tok-str: #2c6e3f; --tok-num: #8a5300; --tok-fn: #2358a6; --tok-com: #7d7a72;
+  --kb-paper: #fff; --kb-paper-text: #9a968c; --kb-paper-danger: #b3261e;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --tok-kw: #f08aa6; --tok-str: #8fd19e; --tok-num: #e6b673; --tok-fn: #8ab4f0; --tok-com: #8f8b80;
+  }
+}
+:root[data-theme="dark"] {
+  --tok-kw: #f08aa6; --tok-str: #8fd19e; --tok-num: #e6b673; --tok-fn: #8ab4f0; --tok-com: #8f8b80;
+}
+
+/* 官方应用共用，和 yihu-meeting 同名。只用上面的令牌，不写死颜色；不用渐变、投影。
+   只有 .yh-* 类，没有全局规则：引入本文件不影响现有页面的布局，现有页面的样式仍在 app.css。新页面优先用这里的类 */
+
+/* 应用顶栏 */
+.yh-top { position: sticky; top: 0; z-index: 20; display: flex; align-items: center; justify-content: space-between; gap: 12px; height: var(--yh-header-h); padding: 0 16px; background: var(--yh-card); border-bottom: 1px solid var(--yh-border); }
+.yh-top-brand { display: inline-flex; align-items: center; gap: 8px; min-height: 44px; min-width: 44px; color: var(--yh-text); font-size: 15px; font-weight: 600; text-decoration: none; white-space: nowrap; }
+.yh-ver { color: var(--yh-text-3); font-family: var(--yh-font-num); font-size: 12px; }
+
+/* 标题 + 一行说明 */
+.yh-page-head { margin-bottom: 16px; }
+.yh-page-head h1 { margin: 0; font-size: 20px; font-weight: 600; line-height: 1.4; overflow-wrap: anywhere; }
+.yh-sub { margin-top: 2px; color: var(--yh-text-3); font-size: 14px; overflow-wrap: anywhere; }
+
+/* 卡片 */
+.yh-card { padding: 20px; background: var(--yh-card); border: 1px solid var(--yh-border); border-radius: var(--yh-radius); }
+
+/* 列表行 */
+.yh-row { display: block; min-height: 44px; padding: 12px; border-bottom: 1px solid var(--yh-border-soft); color: inherit; text-decoration: none; }
+a.yh-row:hover { background: var(--yh-hover); }
+.yh-row-title { min-width: 0; font-weight: 500; overflow-wrap: anywhere; }
+.yh-row-sub { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 12px; margin-top: 2px; color: var(--yh-text-3); font-size: 13px; }
+
+/* 空态：一句话 + 最多一个动作 */
+.yh-empty { display: flex; flex-direction: column; align-items: center; gap: 12px; padding: 40px 16px; color: var(--yh-text-3); text-align: center; }
+
+/* 提示 */
+.yh-toast { position: fixed; right: 24px; bottom: 24px; z-index: 40; max-width: min(360px, calc(100vw - 32px)); padding: 10px 14px; background: var(--yh-primary); border-radius: var(--yh-radius-sm); color: var(--yh-on-primary); font-size: 14px; }
+
+/* 表单 */
+.yh-field { display: block; min-width: 0; margin: 0 0 12px; padding: 0; border: 0; }
+.yh-field > .yh-label { display: block; margin-bottom: 4px; padding: 0; color: var(--yh-text-2); font-size: 13px; }
+.yh-field input, .yh-field textarea, .yh-field select, .yh-input { display: block; width: 100%; min-width: 0; min-height: 44px; padding: 10px 12px; background: var(--yh-card); border: 1px solid var(--yh-border-strong); border-radius: var(--yh-radius-sm); outline: none; appearance: none; }
+.yh-field input:focus, .yh-field textarea:focus, .yh-field select:focus, .yh-input:focus { border-color: var(--yh-primary); }
+.yh-field-error { margin-top: 4px; color: var(--yh-danger); font-size: 13px; }
+.yh-hint { margin-top: 4px; color: var(--yh-text-3); font-size: 13px; }
+
+/* 按钮 */
+.yh-btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-width: 44px; min-height: 44px; padding: 0 16px; background: var(--yh-primary); border: 1px solid var(--yh-primary); border-radius: var(--yh-radius-sm); color: var(--yh-on-primary); font-weight: 500; text-decoration: none; white-space: nowrap; }
+.yh-btn:hover { background: var(--yh-primary-dark); border-color: var(--yh-primary-dark); }
+.yh-btn--ghost { background: var(--yh-card); border-color: var(--yh-border-strong); color: var(--yh-text); }
+.yh-btn--ghost:hover { background: var(--yh-hover); border-color: var(--yh-border-strong); }
+.yh-btn--danger { background: var(--yh-danger); border-color: var(--yh-danger); color: var(--yh-on-primary); }
+.yh-btn:disabled { opacity: .55; cursor: default; }
+
+/* 标签 */
+.yh-tag { display: inline-flex; align-items: center; max-width: 100%; height: 22px; padding: 0 8px; background: var(--yh-fill-2); border-radius: 999px; color: var(--yh-text-2); font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+/* 弹层：手机是底部 sheet，桌面是居中 modal */
+.yh-sheet { position: fixed; inset: 0; width: 480px; max-width: calc(100vw - 32px); height: fit-content; max-height: min(80vh, 680px); margin: auto; padding: 0; background: var(--yh-card); border: 1px solid var(--yh-border); border-radius: var(--yh-radius); color: inherit; }
+.yh-sheet::backdrop { background: rgba(var(--yh-primary-rgb), .32); }
+.yh-sheet-head { display: flex; align-items: center; justify-content: space-between; padding: 4px 4px 4px 16px; border-bottom: 1px solid var(--yh-border); }
+.yh-sheet-head h2 { margin: 0; font-size: 16px; font-weight: 600; }
+.yh-sheet-body { overflow-y: auto; padding: 16px; }
+.yh-sheet-foot { display: flex; justify-content: flex-end; gap: 8px; padding: 8px 16px; border-top: 1px solid var(--yh-border); background: var(--yh-card); }
+
+@media (max-width: 640px) {
+  .yh-top { padding: 0 12px; }
+  .yh-card { padding: 14px; }
+  .yh-toast { right: auto; left: 50%; bottom: calc(20px + env(safe-area-inset-bottom)); transform: translateX(-50%); width: max-content; }
+  .yh-sheet { inset: auto 0 0 0; width: 100%; max-width: 100%; border: 0; border-radius: var(--yh-radius) var(--yh-radius) 0 0; }
+}

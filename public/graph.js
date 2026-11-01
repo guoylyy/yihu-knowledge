@@ -78,8 +78,8 @@ function readColors() {
   const css = getComputedStyle(document.documentElement);
   const v = (name) => css.getPropertyValue(name).trim();
   colors = {
-    palette: [...PALETTE[isDark() ? 'dark' : 'light'], v('--muted')],
-    bg: v('--bg'), text: v('--text'), muted: v('--muted'), accent: v('--accent'),
+    palette: [...PALETTE[isDark() ? 'dark' : 'light'], v('--yh-text-2')],
+    bg: v('--yh-bg'), text: v('--yh-text'), muted: v('--yh-text-2'), accent: v('--yh-primary'),
     font: `11px ${getComputedStyle(document.body).fontFamily}`,
   };
 }

@@ -19,7 +19,7 @@ test('品牌图标：未登录、登录后、分享访客的页面都有顶栏�
     const guest = new Client(kb.port);
     for (const { text } of [await guest.get('/login'), await owner.get('/'), await new Client(kb.port).get(link)]) {
       assert.ok(text.includes('<link rel="icon" type="image/svg+xml" href="/assets/icon.svg">'));
-      assert.match(text, /<a class="brand" href="[^"]*"><svg class="brand-icon"[^>]*aria-hidden="true">.*#d2521e.*<\/svg>[^<]/);
+      assert.match(text, /<a class="brand" href="[^"]*"><svg class="brand-icon"[^>]*aria-hidden="true">.*fill="var\(--yh-highlight\)".*<\/svg>[^<]/);
     }
 
     const icon = await guest.get('/assets/icon.svg');

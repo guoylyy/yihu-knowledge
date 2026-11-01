@@ -1,6 +1,6 @@
 {
   "name": "yihu-knowledge",
-  "version": "1.5.2",
+  "version": "1.5.3",
   "private": true,
   "license": "MIT",
   "repository": "github:guoylyy/yihu-knowledge",
@@ -22,7 +22,9 @@
     "screenshots:access": "node scripts/access-screenshots.mjs",
     "screenshots:settings": "node scripts/settings-screenshots.mjs",
     "screenshots:version": "node scripts/version-screenshots.mjs",
-    "screenshots:browse": "node scripts/browse-screenshots.mjs"
+    "screenshots:browse": "node scripts/browse-screenshots.mjs",
+    "screenshots:vi": "node scripts/vi-screenshots.mjs",
+    "sync-vi": "node scripts/sync-vi.mjs"
   },
   "dependencies": {
     "argon2": "^0.45.1",
