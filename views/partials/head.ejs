@@ -11,7 +11,7 @@
 <meta name="referrer" content="no-referrer">
 <title><%= pageTitle %> · <%= siteName %></title>
 <script src="<%= base %>/assets/theme.js"></script>
-<link rel="icon" href="data:,">
+<link rel="icon" type="image/svg+xml" href="<%= base %>/assets/icon.svg">
 <link rel="stylesheet" href="<%= base %>/assets/app.css">
 </head>
 <body>
@@ -23,9 +23,9 @@
   </button>
   <% } %>
   <% if (shareMode) { %>
-  <a class="brand" href="<%= ctx.home %>"><%= siteName %></a>
+  <a class="brand" href="<%= ctx.home %>"><%- include('brand-icon') %><%= siteName %></a>
   <% } else { %>
-  <a class="brand" href="<%= base %><%= signedIn ? '/' : '/login' %>"><%= siteName %></a>
+  <a class="brand" href="<%= base %><%= signedIn ? '/' : '/login' %>"><%- include('brand-icon') %><%= siteName %></a>
   <% } %>
   <% if (signedIn) { %>
   <span class="top-version">v<%= version %></span>

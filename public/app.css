@@ -50,6 +50,8 @@ code, pre { font-family: var(--mono); }
   background: var(--surface); border-bottom: 1px solid var(--border);
 }
 .brand { font-weight: 650; color: var(--text); text-decoration: none; white-space: nowrap; padding: 0 4px; }
+/* 画板底部 3/24 是留白，下沉这么多墨迹才落在文字基线上 */
+.brand-icon { width: 18px; height: 18px; margin-right: 6px; vertical-align: -2.25px; }
 .top-version { display: none; color: var(--muted); font-size: .75rem; white-space: nowrap; }
 .topsearch { flex: 1; min-width: 0; }
 .topsearch input {
@@ -231,6 +233,7 @@ input:not([type="checkbox"]), select { min-height: 44px; padding: 0 10px; border
 @media (min-width: 768px) {
   .main { padding: 24px 32px 64px; }
   .topbar { padding: 0 16px; }
+  .brand-icon { width: 20px; height: 20px; vertical-align: -2.5px; }
   .top-version { display: inline; }
   .topsearch { max-width: 420px; margin-left: auto; }
   #drawer-open, #drawer-close, .scrim { display: none; }
