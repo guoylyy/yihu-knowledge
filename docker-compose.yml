@@ -45,8 +45,11 @@ services:
       YH_APP_URL: ${YH_APP_URL:-}
       TZ: ${TZ:-Asia/Shanghai}
     volumes:
-      - ./library:/library:ro
-      - ./data:/data
+      # 笔记目录：默认仓库里的 ./library；线上部署在 .env 里写 KB_LIBRARY=/真实/路径
+      # 换目录只改这一行 + docker compose up -d，索引与设置都在 ./data 里，不会丢
+      - ${KB_LIBRARY:-./library}:/library:ro
+      # 索引、配置、分享、预览缓存都在这一个目录里，务必挂出来
+      - ${KB_DATA:-./data}:/data
     read_only: true
     tmpfs:
       - /tmp
